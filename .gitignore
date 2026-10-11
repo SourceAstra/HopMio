@@ -10,6 +10,9 @@ test-results/
 playwright-report/
 .pytest_cache/
 .ruff_cache/
+历史方案/
+设计效果图/
+验收截图/
 __pycache__/
 *.pyc
 .env

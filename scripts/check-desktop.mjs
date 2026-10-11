@@ -52,7 +52,7 @@ try {
   });
   if (!state.desktop || state.node !== 'undefined' || state.asset !== 200 || state.size < 1000)
     throw new Error(JSON.stringify(state));
-  await fs.mkdir('验收截图', { recursive: true });
+  await fs.mkdir('test-results/screenshots', { recursive: true });
   await window.reload();
   await window.getByRole('heading', { name: '我的灵感' }).waitFor();
   await window.waitForTimeout(800);
@@ -68,16 +68,16 @@ try {
       ),
     );
   if (!illustrations) throw new Error('乌萨奇角色素材没有正确显示');
-  await window.screenshot({ path: '验收截图/呀哈造物-桌面实测.png', fullPage: true });
+  await window.screenshot({ path: 'test-results/screenshots/呀哈造物-桌面实测.png', fullPage: true });
   await window.getByRole('button', { name: '小屋门厅', exact: true }).click();
   await expect(window.getByRole('heading', { name: '呀哈，欢迎来到小屋！' })).toBeVisible();
   await expect(window.locator('main img.cottage-art')).toBeVisible();
   await expect(window.locator('main img.cottage-art')).toHaveJSProperty('complete', true);
-  await window.screenshot({ path: '验收截图/呀哈造物-乌萨奇小屋.png', fullPage: true });
+  await window.screenshot({ path: 'test-results/screenshots/呀哈造物-乌萨奇小屋.png', fullPage: true });
   await window.getByRole('button', { name: '乌萨奇展厅', exact: true }).click();
   await expect(window.getByRole('heading', { name: '乌萨奇展厅', exact: true })).toBeVisible();
   await expect(window.locator('.gallery-banner img.usagi-character')).toBeVisible();
-  await window.screenshot({ path: '验收截图/呀哈造物-乌萨奇展厅.png', fullPage: true });
+  await window.screenshot({ path: 'test-results/screenshots/呀哈造物-乌萨奇展厅.png', fullPage: true });
   console.log('独立桌面包验证通过', state);
 } finally {
   await app.close();
