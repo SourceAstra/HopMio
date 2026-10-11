@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const directoryOnly = process.argv.includes('--dir');
 const steps = [
+  ['准备乌萨奇应用图标', ['scripts/build-icons.mjs']],
   ['检查代码', ['node_modules/typescript/bin/tsc', '--noEmit']],
   ['构建网页', ['node_modules/vite/bin/vite.js', 'build']],
   ['构建桌面程序', ['scripts/build-desktop.mjs']],

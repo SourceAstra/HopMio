@@ -1,6 +1,6 @@
 {
   "name": "yaha-craft",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "author": "YaHa Craft Family",
@@ -60,7 +60,9 @@
     ],
     "win": {
       "target": "portable",
-      "signAndEditExecutable": false
+      "icon": "public/art/usagi/app-icon.ico",
+      "signAndEditExecutable": true,
+      "signExecutable": false
     },
     "portable": {
       "artifactName": "YaHa-Craft-${version}-Windows.exe"

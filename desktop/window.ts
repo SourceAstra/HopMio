@@ -7,6 +7,7 @@ export function createWindow(root: string, devUrl?: string) {
     minWidth: 1080,
     minHeight: 720,
     title: '呀哈造物 · 乌萨奇小屋',
+    icon: path.join(root, '..', 'web', 'art', 'usagi', 'app-icon.png'),
     backgroundColor: '#fff9ed',
     autoHideMenuBar: true,
     webPreferences: {
