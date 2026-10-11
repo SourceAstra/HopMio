@@ -1,0 +1,190 @@
+/* 小屋工坊练习：修改这些颜色，看看你的小屋有什么变化。 */
+:root {
+  --accent: #ffda32;
+  --accent-deep: #eeaf16;
+  --cream: #fff9ed;
+  --ink: #393329;
+  --muted: #898579;
+  --line: #f0e2c6;
+  --blue: #deeff8;
+  --green: #65a46d;
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  color: var(--ink);
+  background: var(--cream);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid #7cbacb;
+  outline-offset: 3px;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+h1 {
+  font-size: 32px;
+  letter-spacing: -1px;
+}
+h2 {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+h3 {
+  font-size: 16px;
+}
+p {
+  line-height: 1.65;
+}
+label {
+  font-size: 14px;
+  font-weight: 600;
+}
+input:not([type='checkbox']):not([type='range']),
+textarea,
+select {
+  width: 100%;
+  border: 1px solid #dededc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+}
+textarea {
+  resize: vertical;
+}
+input[type='checkbox'] {
+  accent-color: var(--accent-deep);
+  width: 17px;
+  height: 17px;
+}
+input[type='range'] {
+  accent-color: var(--accent-deep);
+  min-width: 20px;
+  cursor: pointer;
+}
+small,
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-weight: 700;
+  font-size: 14px;
+  transition:
+    transform 0.15s,
+    background 0.15s;
+}
+.primary {
+  background: var(--accent);
+  box-shadow: 0 3px 0 #efc72b;
+}
+.primary:hover:not(:disabled) {
+  background: #ffdf52;
+  transform: translateY(-1px);
+}
+.secondary {
+  background: white;
+  border: 1px solid #dededc;
+  box-shadow: 0 2px 0 #eeeae1;
+}
+.secondary:hover:not(:disabled) {
+  background: #fff9df;
+}
+.link {
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8c7140;
+  padding: 4px 0;
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px;
+  border-radius: 9px;
+}
+.pill {
+  font-size: 11px;
+  display: inline-block;
+  background: #fff4d2;
+  color: #9a7a33;
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-weight: 600;
+}
+.panel {
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 17px;
+  box-shadow: 0 3px 12px #8f6b1710;
+  padding: 18px;
+}
+.panel-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.soft-notice {
+  background: #fff5da;
+  color: #8b723f;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.selected {
+  border-color: var(--accent-deep) !important;
+  background: #fffaf0 !important;
+}
+.button-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+progress {
+  width: 100%;
+  height: 9px;
+  accent-color: var(--accent-deep);
+}

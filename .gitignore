@@ -1,0 +1,17 @@
+node_modules/
+.venv/
+.yaha/
+.yaha-*/
+dist/
+desktop-dist/
+build/
+release/
+test-results/
+playwright-report/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example

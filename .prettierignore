@@ -1,0 +1,13 @@
+node_modules
+.venv
+.yaha*
+dist
+desktop-dist
+build
+release
+pnpm-lock.yaml
+设计效果图
+历史方案
+test-results
+.pytest_cache
+.ruff_cache

@@ -1,0 +1,74 @@
+{
+  "name": "yaha-craft",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "author": "YaHa Craft Family",
+  "description": "呀哈造物 · 乌萨奇小屋造物之旅",
+  "main": "desktop-dist/main.cjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "node scripts/dev-web.mjs --open",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/build-desktop.mjs",
+    "test:engine": "node scripts/test-engine.mjs",
+    "test:ui": "playwright test",
+    "runtime:prepare": "node scripts/prepare-runtime.mjs",
+    "package": "node scripts/package-windows.mjs",
+    "package:dir": "node scripts/package-windows.mjs --dir"
+  },
+  "build": {
+    "electronDist": "node_modules/electron/dist",
+    "appId": "craft.yaha.desktop",
+    "productName": "呀哈造物",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "desktop-dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/yaha",
+        "to": "backend/yaha",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**"
+        ]
+      },
+      {
+        "from": "build/python",
+        "to": "python"
+      }
+    ],
+    "win": {
+      "target": "portable",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "YaHa-Craft-${version}-Windows.exe"
+    }
+  },
+  "dependencies": {
+    "lucide-react": "^1.55.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}
