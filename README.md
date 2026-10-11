@@ -100,7 +100,7 @@ tests/                     网格/存储/AI 协议与界面流程
 
 ## 检查与打包
 
-双击 **一键打包呀哈造物.cmd**，自动完成代码检查、网页构建、桌面构建、独立 Python 准备与 Windows EXE 打包。无需在命令行配置 pnpm。成功后输出 `release/YaHa-Craft-<版本号>-Windows.exe`；失败会停止并保留错误信息。打包需要几分钟，窗口结束前请保持打开。命令行也可运行 `pnpm package`。
+双击 **一键打包呀哈造物.cmd**，自动完成代码检查、网页构建、桌面构建、独立 Python 准备与 Windows EXE 打包。入口会自动查找系统或本机 Codex 运行环境中的 pnpm，并提前验证依赖 JSON；所有打包子进程使用同一个已验证的环境。成功后输出 `release/YaHa-Craft-<版本号>-Windows.exe`；失败会停止并保留错误信息。打包需要几分钟，窗口结束前请保持打开。命令行也可运行 `pnpm package`。
 
 ```powershell
 pnpm test:engine

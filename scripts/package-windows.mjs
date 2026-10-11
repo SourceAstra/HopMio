@@ -3,9 +3,11 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { preparePackageEnvironment } from './package-environment.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const directoryOnly = process.argv.includes('--dir');
+let packageEnvironment;
 const steps = [
   ['准备乌萨奇应用图标', ['scripts/build-icons.mjs']],
   ['检查代码', ['node_modules/typescript/bin/tsc', '--noEmit']],
@@ -20,7 +22,7 @@ const steps = [
 
 function run(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd: root, stdio: 'inherit', windowsHide: true });
+    const child = spawn(process.execPath, args, { cwd: root, env: packageEnvironment, stdio: 'inherit', windowsHide: true });
     child.once('error', reject);
     child.once('exit', (code, signal) => {
       if (code === 0) resolve();
@@ -34,6 +36,7 @@ try {
   await fs.access(path.join(root, '.venv/Scripts/python.exe'));
   await fs.access(path.join(root, 'node_modules/electron/dist/electron.exe'));
   console.log('呀哈造物 · 一键 Windows 打包');
+  packageEnvironment = await preparePackageEnvironment(root);
   for (const [index, [label, args]] of steps.entries()) {
     console.log(`\n[${index + 1}/${steps.length}] ${label}`);
     await run(args);
