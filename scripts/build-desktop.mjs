@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 await build({
   entryPoints: ['desktop/main.ts', 'desktop/preload.ts'],
-  outdir: 'desktop-dist',
+  outdir: '.artifacts/desktop',
   outExtension: { '.js': '.cjs' },
   bundle: true,
   platform: 'node',

@@ -5,7 +5,7 @@
   "type": "module",
   "author": "YaHa Craft Family",
   "description": "呀哈造物 · 乌萨奇小屋造物之旅",
-  "main": "desktop-dist/main.cjs",
+  "main": ".artifacts/desktop/main.cjs",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:web": "node scripts/dev-web.mjs --open",
@@ -18,15 +18,30 @@
     "package:dir": "node scripts/package-windows.mjs --dir"
   },
   "build": {
+    "extraMetadata": {
+      "main": "desktop/main.cjs"
+    },
     "electronDist": "node_modules/electron/dist",
     "appId": "craft.yaha.desktop",
     "productName": "呀哈造物",
     "directories": {
-      "output": "release"
+      "output": ".artifacts/windows"
     },
     "files": [
-      "dist/**",
-      "desktop-dist/**",
+      {
+        "from": ".artifacts/web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": ".artifacts/desktop",
+        "to": "desktop",
+        "filter": [
+          "**/*"
+        ]
+      },
       "package.json"
     ],
     "extraResources": [
@@ -39,7 +54,7 @@
         ]
       },
       {
-        "from": "build/python",
+        "from": ".artifacts/python",
         "to": "python"
       }
     ],

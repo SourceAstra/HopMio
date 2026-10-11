@@ -10,7 +10,7 @@ const result = spawnSync(
 );
 if (result.status !== 0) throw new Error('请先创建 .venv 并安装 Python 依赖。');
 const base = result.stdout.trim();
-const target = path.resolve('build/python');
+const target = path.resolve('.artifacts/python');
 await fs.mkdir(target, { recursive: true });
 for (const entry of await fs.readdir(base, { withFileTypes: true })) {
   if (entry.isFile() && /\.(exe|dll|zip)$/i.test(entry.name))

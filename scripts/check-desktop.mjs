@@ -3,7 +3,7 @@ import { _electron as electron, expect } from '@playwright/test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 const app = await electron.launch({
-  executablePath: path.resolve('release/win-unpacked/呀哈造物.exe'),
+  executablePath: path.resolve('.artifacts/windows/win-unpacked/呀哈造物.exe'),
   env: {
     ...process.env,
     YAHA_DATA_DIR: path.resolve(process.env.YAHA_DESKTOP_CHECK_DIR || '.yaha-desktop-check'),

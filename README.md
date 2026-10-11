@@ -20,7 +20,7 @@
 - 修改 Python 引擎：关闭启动窗口，再双击网页启动文件，让引擎加载最新代码。
 - 网页支持项目、真实模型生成、3D 预览、体检、文件下载和展厅；密钥与云端能力仍由本地引擎和家长设置管理。
 - 网页作品默认保存在项目目录的 `.yaha`；桌面发布版使用自己的作品目录。需要迁移时导出并导入 `.usagi` 作品包。
-- 网页只在本机运行，不能直接双击 `dist/index.html` 使用引擎功能。调用桌面桥接打开 Bambu Studio 时使用桌面开发版 `pnpm dev`；网页可先下载模型后手动用 Bambu Studio 打开。
+- 网页只在本机运行，不能直接双击 `.artifacts/web/index.html` 使用引擎功能。调用桌面桥接打开 Bambu Studio 时使用桌面开发版 `pnpm dev`；网页可先下载模型后手动用 Bambu Studio 打开。
 
 需要检查桌面专属能力时使用桌面开发版；发布给其他电脑时再生成 Windows 发布包。
 
@@ -112,4 +112,4 @@ pnpm package
 
 `runtime:prepare` 将开发 Python 与本项目依赖复制成独立运行时；Windows 发布输出在 `release/`。发布前以独立包启动验证。应用暂未配置代码签名，供家庭本机使用；正式发行时应增加签名、自动更新、服务条款及角色素材授权。
 
-`dist/`、`desktop-dist/`、`build/`、`release/win-unpacked/` 为可重新生成的构建产物，日常网页开发不需要保留。`pnpm build` 重建前端与桌面代码，`pnpm runtime:prepare` 重建独立 Python，`pnpm package:dir` 重建桌面验收目录；运行 `node scripts/check-desktop.mjs` 前先执行 `pnpm package:dir`。测试数据 `.yaha-*/` 与测试缓存也可清理；请保留真实作品目录 `.yaha/`、开发依赖 `.venv/` 和 `node_modules/`。
+所有构建中间产物集中在 `.artifacts/`：`web/` 是网页，`desktop/` 是桌面代码，`python/` 是独立引擎，`windows/` 是打包工作目录。`release/` 只保存最终 EXE。这些中间产物可以重新生成，日常网页开发不需要保留。`pnpm build` 重建前端与桌面代码，`pnpm runtime:prepare` 重建独立 Python，`pnpm package:dir` 重建桌面验收目录；运行 `node scripts/check-desktop.mjs` 前先执行 `pnpm package:dir`。测试数据 `.yaha-*/` 与测试缓存也可清理；请保留真实作品目录 `.yaha/`、开发依赖 `.venv/` 和 `node_modules/`。

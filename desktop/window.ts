@@ -21,6 +21,6 @@ export function createWindow(root: string, devUrl?: string) {
     if (!url.startsWith(devUrl || 'file://')) event.preventDefault();
   });
   if (devUrl) window.loadURL(devUrl);
-  else window.loadFile(path.join(root, '..', 'dist', 'index.html'));
+  else window.loadFile(path.join(root, '..', 'web', 'index.html'));
   return window;
 }

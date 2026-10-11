@@ -1,5 +1,6 @@
 node_modules
 .venv
+.artifacts
 .yaha*
 dist
 desktop-dist

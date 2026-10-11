@@ -39,8 +39,13 @@ try {
   }
   const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
   const result = directoryOnly
-    ? path.join(root, 'release/win-unpacked', `${pkg.build.productName}.exe`)
+    ? path.join(root, '.artifacts/windows/win-unpacked', `${pkg.build.productName}.exe`)
     : path.join(root, 'release', `YaHa-Craft-${pkg.version}-Windows.exe`);
+  if (!directoryOnly) {
+    const generated = path.join(root, '.artifacts/windows', path.basename(result));
+    await fs.mkdir(path.dirname(result), { recursive: true });
+    await fs.copyFile(generated, result);
+  }
   await fs.access(result);
   console.log(`\n打包完成：${result}`);
 } catch (error) {
