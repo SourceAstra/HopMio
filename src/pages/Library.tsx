@@ -59,6 +59,17 @@ export function Library() {
                 >
                   {p.exhibited ? '收回作品柜' : '放入展厅'}
                 </button>
+                <button
+                  className="secondary danger-btn"
+                  disabled={s.busy}
+                  onClick={() => {
+                    if (window.confirm(`确定要彻底删除作品“${p.name}”吗？此操作无法撤销。`)) {
+                      void s.deleteProject(p.id);
+                    }
+                  }}
+                >
+                  删除作品
+                </button>
               </div>
             </div>
           </article>

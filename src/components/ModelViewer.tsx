@@ -21,45 +21,139 @@ const shapeNames: Record<string, string> = {
 };
 
 const thumbnailCache = new Map<string, string>();
-let activeRenders = 0;
-const MAX_CONCURRENT_RENDERS = 1;
-const renderQueue: Array<() => void> = [];
+let sharedThumbnailRenderer: THREE.WebGLRenderer | null = null;
+let thumbnailQueue = Promise.resolve();
 
-function requestRenderSlot(callback: () => void): () => void {
-  let cancelled = false;
-  const wrapped = () => {
-    if (!cancelled) {
-      activeRenders++;
-      callback();
-    } else {
-      processNext();
+function getThumbnailRenderer(): THREE.WebGLRenderer | null {
+  if (typeof window === 'undefined') return null;
+  if (!sharedThumbnailRenderer) {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 400;
+      canvas.height = 300;
+      sharedThumbnailRenderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        preserveDrawingBuffer: true,
+        alpha: false,
+      });
+      sharedThumbnailRenderer.setPixelRatio(1);
+    } catch (e) {
+      console.warn('Failed to initialize shared thumbnail renderer:', e);
+      return null;
     }
-  };
-
-  if (activeRenders < MAX_CONCURRENT_RENDERS) {
-    activeRenders++;
-    callback();
-  } else {
-    renderQueue.push(wrapped);
   }
-
-  return () => {
-    cancelled = true;
-    const idx = renderQueue.indexOf(wrapped);
-    if (idx !== -1) renderQueue.splice(idx, 1);
-  };
+  return sharedThumbnailRenderer;
 }
 
-function processNext() {
-  if (renderQueue.length > 0) {
-    const next = renderQueue.shift();
-    if (next) next();
-  }
-}
+export function generateThumbnail(assetId: string): Promise<string> {
+  const cached = thumbnailCache.get(assetId);
+  if (cached) return Promise.resolve(cached);
 
-function releaseRenderSlot() {
-  activeRenders = Math.max(0, activeRenders - 1);
-  processNext();
+  const task = thumbnailQueue.then(
+    () =>
+      new Promise<string>((resolve, reject) => {
+        const cachedNow = thumbnailCache.get(assetId);
+        if (cachedNow) {
+          resolve(cachedNow);
+          return;
+        }
+
+        const renderer = getThumbnailRenderer();
+        if (!renderer) {
+          reject(new Error('WebGL 不可用'));
+          return;
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#fffdf7');
+        const camera = new THREE.PerspectiveCamera(35, 400 / 300, 0.1, 3000);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0xd6cba5, 1.8));
+        const light = new THREE.DirectionalLight(0xffffff, 2.0);
+        light.position.set(-80, 160, 130);
+        scene.add(light);
+
+        const loader = new GLTFLoader();
+        loader.load(
+          assetUrl(assetId),
+          (gltf) => {
+            try {
+              const model = gltf.scene;
+              let meters = false;
+              model.traverse((child) => {
+                if (child.userData.yaha_units === 'm') meters = true;
+              });
+              if (meters) model.scale.multiplyScalar(1000);
+
+              model.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  if (child.userData.yaha_appearance !== 'original') {
+                    const old = child.geometry;
+                    old.deleteAttribute('normal');
+                    old.deleteAttribute('color');
+                    child.geometry = mergeVertices(old);
+                    old.dispose();
+                    child.geometry.computeVertexNormals();
+                    child.material = new THREE.MeshStandardMaterial({
+                      color: '#fff0c8',
+                      roughness: 0.68,
+                    });
+                  }
+                }
+              });
+
+              scene.add(model);
+
+              const box = new THREE.Box3().setFromObject(model);
+              const center = box.getCenter(new THREE.Vector3());
+              model.position.set(-center.x, -box.min.y, -center.z);
+
+              const positionedBox = new THREE.Box3().setFromObject(model);
+              const sphere = positionedBox.getBoundingSphere(new THREE.Sphere());
+              const angle = Math.min(
+                THREE.MathUtils.degToRad(camera.fov / 2),
+                Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect),
+              );
+              const distance = Math.max(40, (sphere.radius / Math.sin(angle)) * 1.15);
+              camera.position
+                .copy(new THREE.Vector3(0.8, 0.9, 2.15).normalize())
+                .multiplyScalar(distance)
+                .add(sphere.center);
+              camera.lookAt(sphere.center);
+              camera.far = Math.max(3000, distance * 8);
+              camera.updateProjectionMatrix();
+
+              renderer.setSize(400, 300, false);
+              renderer.render(scene, camera);
+
+              const dataUrl = renderer.domElement.toDataURL('image/png');
+              scene.traverse(disposeObjectSingle);
+
+              if (dataUrl && dataUrl.length > 200) {
+                thumbnailCache.set(assetId, dataUrl);
+                resolve(dataUrl);
+              } else {
+                reject(new Error('生成预览失败'));
+              }
+            } catch (err) {
+              scene.traverse(disposeObjectSingle);
+              reject(err);
+            }
+          },
+          undefined,
+          (err) => {
+            scene.traverse(disposeObjectSingle);
+            reject(err);
+          },
+        );
+      }),
+  );
+
+  thumbnailQueue = task.then(
+    () => {},
+    () => {},
+  );
+  return task;
 }
 
 export function ModelViewer({
@@ -98,33 +192,30 @@ export function ModelViewer({
   const [snapshot, setSnapshot] = useState<string | null>(() =>
     compact && assetId ? thumbnailCache.get(assetId) || null : null,
   );
-  const [hasSlot, setHasSlot] = useState<boolean>(!compact);
 
   useEffect(() => {
-    if (!compact || snapshot || !assetId) return;
-    const cancel = requestRenderSlot(() => {
-      setHasSlot(true);
-    });
+    if (!compact || !assetId || snapshot) return;
+    let active = true;
+    generateThumbnail(assetId)
+      .then((url) => {
+        if (active) setSnapshot(url);
+      })
+      .catch((err) => {
+        if (active) setError(err?.message || '预览加载失败');
+      });
     return () => {
-      cancel();
+      active = false;
     };
-  }, [compact, snapshot, assetId]);
+  }, [compact, assetId, snapshot]);
 
   useEffect(() => {
-    if (!assetId || (compact && snapshot) || !hasSlot || !host.current) return;
+    if (compact || !assetId || !host.current) return;
     setError('');
     meshesRef.current = [];
     selectionMeshesRef.current = [];
     const node = host.current;
     let disposed = false;
     let model: THREE.Object3D | null = null;
-    let slotReleased = false;
-    const safeReleaseSlot = () => {
-      if (compact && !slotReleased) {
-        slotReleased = true;
-        releaseRenderSlot();
-      }
-    };
     const scene = new THREE.Scene();
     scene.background = new THREE.Color('#fffdf7');
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 3000);
@@ -133,7 +224,6 @@ export function ModelViewer({
       renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     } catch {
       setError('这台设备暂时无法显示 3D，可继续导出模型。');
-      safeReleaseSlot();
       return;
     }
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -267,26 +357,11 @@ export function ModelViewer({
           model.position.set(-center.x, -box.min.y, -center.z);
           modelRef.current = model;
           fit();
-          if (compact) {
-            renderer.render(scene, camera);
-            try {
-              const dataUrl = renderer.domElement.toDataURL('image/png');
-              if (dataUrl && dataUrl.length > 200) {
-                thumbnailCache.set(assetId, dataUrl);
-                setSnapshot(dataUrl);
-              }
-            } catch {
-              // fallback
-            } finally {
-              safeReleaseSlot();
-            }
-          }
         },
         undefined,
         () => {
           if (!disposed) {
             setError('模型预览加载失败，请重新打开作品。');
-            safeReleaseSlot();
           }
         },
       );
@@ -441,19 +516,12 @@ export function ModelViewer({
       fit();
     });
     observer.observe(node);
-    if (!compact) {
-      renderer.setAnimationLoop(() => {
-        controls.update();
-        renderer.render(scene, camera);
-      });
-    } else {
-      controls.addEventListener('change', () => {
-        renderer.render(scene, camera);
-      });
-    }
+    renderer.setAnimationLoop(() => {
+      controls.update();
+      renderer.render(scene, camera);
+    });
     return () => {
       disposed = true;
-      safeReleaseSlot();
       meshesRef.current = [];
       selectionMeshesRef.current = [];
       dom.removeEventListener('pointermove', onPointerMove);
@@ -501,32 +569,40 @@ export function ModelViewer({
       }
     });
   }, [selectedPartId]);
+  if (compact) {
+    if (!assetId) {
+      return (
+        <div className="viewer compact">
+          <div className="viewer-empty">把想法告诉乌萨奇，模型会出现在这里 ✨</div>
+        </div>
+      );
+    }
+    if (snapshot) {
+      return (
+        <div className="viewer compact viewer-snapshot-container">
+          <img src={snapshot} alt="模型预览" className="viewer-snapshot-img" />
+        </div>
+      );
+    }
+    return (
+      <div className="viewer compact viewer-snapshot-container">
+        <div className="viewer-empty" style={{ opacity: 0.7 }}>
+          {error || '✦ 正在生成预览…'}
+        </div>
+      </div>
+    );
+  }
+
   if (!assetId) {
     return (
-      <div className={`viewer ${compact ? 'compact' : ''}`}>
+      <div className="viewer">
         <div className="viewer-empty">{error || '把想法告诉乌萨奇，模型会出现在这里 ✨'}</div>
       </div>
     );
   }
 
-  if (compact && snapshot) {
-    return (
-      <div className="viewer compact viewer-snapshot-container">
-        <img src={snapshot} alt="模型预览" className="viewer-snapshot-img" />
-      </div>
-    );
-  }
-
-  if (compact && !hasSlot && !snapshot) {
-    return (
-      <div className="viewer compact viewer-snapshot-container">
-        <div className="viewer-empty" style={{ opacity: 0.7 }}>✦ 正在加载预览…</div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`viewer ${compact ? 'compact' : ''}`}>
+    <div className="viewer">
       <div ref={host} className="viewer-canvas" data-testid="model-viewer" />
       {hoveredPart && (
         <div

@@ -1128,6 +1128,19 @@
   transform: none;
 }
 
+.project-card-actions .danger-btn {
+  grid-column: 1 / -1;
+  background: #fff8f8;
+  color: #c53030;
+  border-color: #fed7d7;
+}
+
+.project-card-actions .danger-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #9b2c2c;
+  border-color: #fca5a5;
+}
+
 .project-card h2 {
   font-size: 16px;
   font-weight: 750;
@@ -1176,6 +1189,31 @@
   font-size: 12px;
   font-weight: 800;
   color: #87620a;
+}
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.history-actions .danger-btn {
+  background: #fff8f8;
+  color: #c53030;
+  border: 1px solid #fed7d7;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.history-actions .danger-btn:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #9b2c2c;
+  border-color: #fca5a5;
 }
 
 /* --------------------------------------------------------------------------
