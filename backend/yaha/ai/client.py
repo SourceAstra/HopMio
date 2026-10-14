@@ -79,7 +79,7 @@ class CloudJSONClient:
         if not url.endswith(protocol.suffix):
             url += protocol.suffix
         headers, body = protocol.request(prefs["chat_model"], instruction, prompt, images, self.settings.key("chat"))
-        limits = self.settings.imported_model or {}
+        limits = getattr(self.settings, "imported_model", None) or {}
         seconds = limits.get("timeout_seconds", 300)
         if deadline is not None:
             seconds = min(seconds, deadline - time.monotonic())

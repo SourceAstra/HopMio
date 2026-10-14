@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Box, Layers, Images, Sparkles, Download } from 'lucide-react';
+import { ArrowRight, Box, Layers, Images, Sparkles, Download, Clock3 } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
 import { call, assetUrl } from '../api/client';
 import { IdeaPanel } from '../features/workbench/IdeaPanel';
 import { AdjustPanel } from '../features/workbench/AdjustPanel';
+import { History } from '../features/projects/History';
 import { ModelViewer } from '../components/ModelViewer';
 import { Usagi } from '../components/Usagi';
 import { PhotoComparison } from '../features/reconstruction/PhotoComparison';
@@ -14,12 +15,30 @@ import type { Model } from '../types';
 
 export function Workbench() {
   const s = useStudio();
+  const hasPhotos = (s.spec.asset_ids || []).length > 0;
+
   // 核心视口状态：阶段 B 工业精修 | 阶段 A 扫描裸网格 | 多视角实物比对 | 纹理外观
-  const [view, setView] = useState<'stageB' | 'stageA' | 'multiview' | 'original'>('stageB');
+  // 实体生成过程中默认自动切换为多视角实物视角
+  const [view, setView] = useState<'stageB' | 'stageA' | 'multiview' | 'original'>(() => {
+    return (s.spec.asset_ids || []).length > 0 && s.running ? 'multiview' : 'stageB';
+  });
+
   const [inspectAssetId, setInspectAssetId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [selectedPointMm, setSelectedPointMm] = useState<[number, number, number] | null>(null);
+  const [inspectStage, setInspectStage] = useState<number | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const selectionRevision = useRef(s.project?.revision_id);
+  const prevRunningRef = useRef(s.running);
+
+  // 监听实体生成生命周期：当实体生成开始时，若有参考照片，默认自动切换为多视角实物对比视角
+  useEffect(() => {
+    if (!prevRunningRef.current && s.running && hasPhotos) {
+      setView('multiview');
+    }
+    prevRunningRef.current = s.running;
+  }, [s.running, hasPhotos]);
+
   useEffect(() => {
     if (selectionRevision.current !== s.project?.revision_id) {
       selectionRevision.current = s.project?.revision_id;
@@ -40,15 +59,14 @@ export function Workbench() {
   const model = draft || s.project?.model;
   const saved = s.project?.model;
   const hasStageA = !draft && !!saved?.source_glb_id;
-  const hasPhotos = (s.spec.asset_ids || []).length > 0;
 
-  // 资源模型选择
+  // 资源模型选择：优先选用 Blender 水密精修制造实体 saved?.manufacturing_glb_id，确保模型真实展现
   const activeAssetId =
     view === 'stageA' && hasStageA
       ? saved?.source_glb_id
-      : view === 'stageB' && saved?.manufacturing_glb_id
-        ? saved.manufacturing_glb_id
-        : model?.glb_id || saved?.manufacturing_glb_id;
+      : saved?.manufacturing_glb_id ||
+        model?.glb_id ||
+        saved?.glb_id;
 
   return (
     <div className="workbench-page-wrapper">
@@ -78,10 +96,13 @@ export function Workbench() {
       </header>
 
       {/* A+B 深度逆向制造管线能量轨 */}
-      <PipelineEnergyRail />
+      <PipelineEnergyRail
+        activeStage={inspectStage}
+        onSelectStage={(stage) => setInspectStage((prev) => (prev === stage ? null : stage))}
+      />
 
-      {/* 核心三栏造物桌面 */}
-      <div className="workbench-grid full-height">
+      {/* 核心造物桌面：默认两栏宽敞布局，点击阶段展开右侧微调抽屉 */}
+      <div className={`workbench-grid full-height ${inspectStage !== null ? 'with-stage-drawer' : ''}`}>
         {/* 左栏：AI 大脑 · 视觉理解与形体规划中枢 */}
         <IdeaPanel
           selectedPartId={selectedPartId}
@@ -143,15 +164,34 @@ export function Workbench() {
               )}
             </div>
 
-            <span className="pill pipeline-status-pill">
-              {draft
-                ? '初稿 · 正在精修'
-                : !model
-                  ? '等待启动管线'
-                  : s.dirty
-                    ? '上一版本 · 待更新'
-                    : 'A+B 管线已就绪'}
-            </span>
+            {/* 顶栏右侧元信息：管线就绪药丸 + 收纳进来的版本胶囊切换 */}
+            <div className="model-panel-heading-meta">
+              <span className="pill pipeline-status-pill">
+                {draft
+                  ? '初稿 · 正在精修'
+                  : !model
+                    ? '等待启动管线'
+                    : s.dirty
+                      ? '上一版本 · 待更新'
+                      : 'A+B 管线已就绪'}
+              </span>
+
+              {s.project && (
+                <button
+                  type="button"
+                  className="model-version-trigger-pill"
+                  onClick={() => setShowHistoryModal(true)}
+                  title="点击查看历史版本时光机、切换版本或删除版本"
+                >
+                  <Clock3 size={13} className="version-pill-icon" />
+                  <span className="version-pill-label">版本</span>
+                  <span className="version-pill-count">
+                    {s.project.revision_count ? `${s.project.revision_count}版` : 'v1'}
+                  </span>
+                  <span className="version-pill-arrow">▾</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* 3D 视口与多视角对比主展示区 */}
@@ -159,6 +199,7 @@ export function Workbench() {
             {view === 'multiview' && hasPhotos ? (
               <MultiViewComparison
                 model={saved || (model as Model | null)}
+                modelAssetId={activeAssetId}
                 activeAssetId={inspectAssetId}
                 onSelectAsset={(id) => setInspectAssetId(id)}
               />
@@ -259,9 +300,26 @@ export function Workbench() {
           </div>
         </section>
 
-        {/* 右栏：逆向精密调校 & 3D 制造就绪预检 */}
-        <AdjustPanel selectedPartId={selectedPartId} selectedPointMm={selectedPointMm} />
+        {/* 右栏抽屉：点击顶部管线阶段节点时展开检视与微调，平时隐藏 */}
+        {inspectStage !== null && (
+          <AdjustPanel
+            selectedPartId={selectedPartId}
+            selectedPointMm={selectedPointMm}
+            activeStage={inspectStage}
+            onClose={() => setInspectStage(null)}
+          />
+        )}
       </div>
+
+      {/* 历史版本时光机弹窗：由 3D 实体位置区域的版本胶囊直接唤起 */}
+      {showHistoryModal && s.project && (
+        <History
+          project={s.project}
+          onClose={() => setShowHistoryModal(false)}
+          onSelected={() => setShowHistoryModal(false)}
+        />
+      )}
     </div>
   );
 }
+

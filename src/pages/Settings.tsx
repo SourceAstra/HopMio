@@ -30,22 +30,22 @@ export function Settings() {
           </p>
           {!s.preferences?.blender?.available && (
             <p className="soft-notice">
-              Windows 运行“安装Blender.cmd”；Linux 运行 ./install-blender.sh，安装后重启小屋。
+              Windows 运行“安装建模工具.cmd”；Linux 运行 ./setup.sh --blender，安装后重启小屋。
             </p>
           )}
           <p>
             💬 AI 理解与参数建模：
             {s.preferences?.chat_configured
               ? s.preferences.chat_supports_images
-                ? '已配置密钥，可提交文字与照片方案'
-                : '已配置密钥，仅提交文字方案'
+                ? `已配置密钥（${s.preferences.chat_model || '云端模型'}），可提交文字与照片方案`
+                : `已配置密钥（${s.preferences.chat_model || '云端模型'}），仅提交文字方案`
               : '尚未配置密钥'}
           </p>
           <p>表面重建：{s.preferences?.reconstruction?.message || '读取中'}</p>
           <p>A1 mini 切片：{s.preferences?.slicer?.message || '读取中'}</p>
           <p className="soft-notice">
             安装完整工具：Windows 运行“安装建模工具.cmd”；Linux 运行
-            ./install-modeling.sh。原始扫描、制造网格与切片文件分别保存。
+            ./setup.sh。原始扫描、制造网格与切片文件分别保存。
           </p>
           <h3>最近造物任务</h3>
           {jobs.slice(0, 8).map((j) => (

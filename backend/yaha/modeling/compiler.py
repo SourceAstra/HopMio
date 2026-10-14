@@ -9,6 +9,10 @@ from ..contracts import DomainError
 OPERATORS = {"add": operator.add, "subtract": operator.sub, "multiply": operator.mul, "divide": operator.truediv}
 
 
+def compiled_geometry(compiled):
+    return ([{key: value for key, value in step.items() if key != "name"} for step in compiled["steps"]], compiled["surface"])
+
+
 def value(item, parameters, depth=0):
     if depth > 8:
         raise DomainError("参数表达式过深。", "PLAN_BUDGET")

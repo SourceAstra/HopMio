@@ -37,7 +37,7 @@ export function Modal({
       <div className="studio-modal-content">
         <header>
           <h2 id={titleId}>{title}</h2>
-          <button className="icon-button" aria-label="关闭细节调整" onClick={onClose}>
+          <button className="icon-button" aria-label={`关闭${title}`} onClick={onClose}>
             <X size={20} />
           </button>
         </header>

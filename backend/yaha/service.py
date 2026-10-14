@@ -88,6 +88,11 @@ class Service:
         if method == "project.restore":
             with self.lock:
                 return self.projects.restore(p["id"], p["revision_id"])
+        if method == "project.select_revision":
+            with self.lock:
+                if any(job.get("project_id") == p["id"] and job.get("status") in ("queued", "running") for job in self.db.list("jobs")):
+                    raise DomainError("作品任务还在进行，请完成或取消后再切换版本。", "PROJECT_BUSY")
+                return self.projects.select_revision(p["id"], p["revision_id"])
         if method == "project.update":
             changes = {
                 key: str(p[key])[: (4000 if key == "story" else 80)]
@@ -107,6 +112,10 @@ class Service:
                 )
         if method == "asset.upload":
             return self.assets.upload(p["name"], p["base64"])
+        if method == "asset.delete":
+            with self.lock:
+                self.assets.remove(p["id"])
+                return {"ok": True, "id": p["id"]}
         if method == "asset.list":
             return self.db.list("assets")
         if method == "asset.path":

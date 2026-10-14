@@ -6,6 +6,8 @@ node_modules/
 .yaha-*/
 .state/
 .astramap/
+.aws
+pic/
 /bin/
 dist/
 desktop-dist/

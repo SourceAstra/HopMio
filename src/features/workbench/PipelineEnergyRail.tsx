@@ -3,7 +3,15 @@ import { Camera, Cpu, Layers, Scissors, CheckCircle2, Check, Sparkles } from 'lu
 import { useStudio } from '../../state/StudioContext';
 import { isPhotoMode } from '../../theme/modes';
 
-export function PipelineEnergyRail() {
+interface PipelineEnergyRailProps {
+  activeStage?: number | null;
+  onSelectStage?: (stage: number) => void;
+}
+
+export function PipelineEnergyRail({
+  activeStage,
+  onSelectStage,
+}: PipelineEnergyRailProps = {}) {
   const s = useStudio();
   const model = s.project?.model;
   const photoCount = s.spec.asset_ids.length;
@@ -198,13 +206,20 @@ export function PipelineEnergyRail() {
           const isCurrent = st.current;
           const isPassed = st.passed;
           const isReady = st.ready;
-          const nodeClass = `pipeline-rail-node ${isPassed ? 'passed' : ''} ${isCurrent ? 'current' : ''} ${isReady ? 'ready' : ''}`;
+          const isSelected = activeStage === st.step;
+          const nodeClass = `pipeline-rail-node ${isPassed ? 'passed' : ''} ${isCurrent ? 'current' : ''} ${isReady ? 'ready' : ''} ${isSelected ? 'selected' : ''}`;
           const connectorFilled =
             st.passed && (stages[idx + 1]?.passed || stages[idx + 1]?.current);
 
           return (
             <Fragment key={st.step}>
-              <div className={nodeClass}>
+              <div
+                className={nodeClass}
+                onClick={() => onSelectStage?.(st.step)}
+                role="button"
+                tabIndex={0}
+                title={isSelected ? `点击收起 ${st.title} 详情` : `点击展开 ${st.title} 参数与详情`}
+              >
                 <div className="node-top-bar">
                   <div className="node-icon-bubble">
                     {isPassed && !isCurrent ? (
@@ -214,7 +229,9 @@ export function PipelineEnergyRail() {
                     )}
                   </div>
                   <span className="node-title">{st.title}</span>
-                  {isCurrent && s.running ? (
+                  {isSelected ? (
+                    <span className="node-badge selected">详情 ▾</span>
+                  ) : isCurrent && s.running ? (
                     <span className="node-badge running">
                       <Sparkles size={9} className="sparkle-spin" /> 执行中
                     </span>

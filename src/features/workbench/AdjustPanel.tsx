@@ -1,17 +1,30 @@
-import { SlidersHorizontal, RotateCcw, Layers, Scissors, Blocks } from 'lucide-react';
+import {
+  SlidersHorizontal,
+  RotateCcw,
+  Scissors,
+  Blocks,
+  X,
+  Layers,
+} from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
 import { ParameterEditor } from '../modeling/ParameterEditor';
 import type { Spec } from '../../types';
 import { QualityReport } from '../reconstruction/QualityReport';
 import { isPhotoMode } from '../../theme/modes';
 
+interface AdjustPanelProps {
+  selectedPartId?: string | null;
+  selectedPointMm?: [number, number, number] | null;
+  activeStage?: number | null;
+  onClose?: () => void;
+}
+
 export function AdjustPanel({
   selectedPartId,
   selectedPointMm,
-}: {
-  selectedPartId?: string | null;
-  selectedPointMm?: [number, number, number] | null;
-} = {}) {
+  activeStage,
+  onClose,
+}: AdjustPanelProps = {}) {
   const s = useStudio();
   const patch = (data: Partial<Spec>) => s.setSpec((old) => ({ ...old, ...data }));
   const selectedPart = s.spec.modeling_plan?.steps.find((step) => step.id === selectedPartId);
@@ -49,10 +62,44 @@ export function AdjustPanel({
       </div>
     </label>
   );
+
   return (
-    <aside className="adjust-stack">
+    <aside className="adjust-stack" aria-label="阶段检视与微调面板">
+      {/* 顶部检视栏标题与收起按钮 */}
+      <div className="adjust-drawer-header">
+        <div className="drawer-title-wrap">
+          <SlidersHorizontal size={15} className="sparkle-gold" />
+          <div className="drawer-title-text">
+            <strong>
+              {activeStage === 3
+                ? '阶段 A: 摄影测量表面重构详情'
+                : activeStage === 4
+                  ? '阶段 B: Blender 切平定标微调'
+                  : activeStage === 2
+                    ? '② AI 大脑拓扑参数精修'
+                    : activeStage === 1
+                      ? '① 视觉视角与照片详情'
+                      : activeStage === 5
+                        ? '⑤ 3D 打印切片与就绪指标'
+                        : '制造管线阶段微调'}
+            </strong>
+            <small>参数将作为下一版本的物理输入约束</small>
+          </div>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            className="drawer-close-btn"
+            onClick={onClose}
+            title="收起检视面板，腾出桌面空间"
+          >
+            <X size={14} /> 收起
+          </button>
+        )}
+      </div>
+
       {/* 阶段 B：Blender 工业制造精修与切平控制 */}
-      {isPhotoMode(s.spec.mode) && (
+      {(activeStage === 4 || activeStage === null || isPhotoMode(s.spec.mode)) && (
         <section className="panel stage-b-tuning-panel">
           <div className="panel-title">
             <h2>
@@ -84,18 +131,19 @@ export function AdjustPanel({
         </section>
       )}
 
-      {!isPhotoMode(s.spec.mode) && (
+      {/* 参数调校面板 */}
+      {(activeStage === 2 || activeStage === null || !isPhotoMode(s.spec.mode)) && (
         <section className="panel">
           <div className="panel-title">
             <h2>
-              <SlidersHorizontal size={20} /> 调整作品
+              <SlidersHorizontal size={18} /> 调整作品参数
             </h2>
             <button
               className="link"
               disabled={!s.project}
               onClick={() => s.project && s.setSpec(s.project.spec)}
             >
-              <RotateCcw size={14} /> 撤销修改
+              <RotateCcw size={13} /> 撤销修改
             </button>
           </div>
 
@@ -105,7 +153,12 @@ export function AdjustPanel({
               {(selectedPart || selectedPointMm) && (
                 <div className="selected-part-actions">
                   <strong>已选中：{selectedPart?.name || '模型表面位置'}</strong>
-                  {selectedPointMm && <small>X/Y/Z {selectedPointMm.map((value) => value.toFixed(1)).join(' / ')} mm。AI 微调会优先检查此处。</small>}
+                  {selectedPointMm && (
+                    <small>
+                      X/Y/Z {selectedPointMm.map((value) => value.toFixed(1)).join(' / ')} mm。AI
+                      微调会优先检查此处。
+                    </small>
+                  )}
                 </div>
               )}
               <div className="adjust-actions">
@@ -116,7 +169,7 @@ export function AdjustPanel({
                   onClick={() => void s.generate()}
                   title="按修改后的参数在本地 Blender 重新生成模型（不消耗云端 AI）"
                 >
-                  <Blocks size={16} /> {s.dirty ? '应用修改 · 重新生成模型' : '重新生成 3D 模型'}
+                  <Blocks size={15} /> {s.dirty ? '应用修改 · 重新生成模型' : '重新生成 3D 模型'}
                 </button>
               </div>
               <p className="muted">
@@ -196,34 +249,11 @@ export function AdjustPanel({
           </small>
         </section>
       )}
-      <QualityReport />
-      <section className="panel version-card compact">
-        <div className="version-card-header">
-          <div className="version-title-wrap">
-            <Layers size={15} />
-            <strong>版本 {String(s.project?.revision_count || 0).padStart(2, '0')}</strong>
-          </div>
-          {s.project?.model && (
-            <span className="pill success">
-              {s.project.model.faces.toLocaleString()} 面
-            </span>
-          )}
-          <button
-            type="button"
-            className="link version-link"
-            onClick={() => s.setRoom('library')}
-            title="查看作品版本历史"
-          >
-            版本历史 →
-          </button>
-        </div>
-        <div className="version-card-meta">
-          <span>{s.project?.model?.origin || '尚未生成模型'}</span>
-          {s.project?.model?.measurements?.length ? (
-            <span> · 已复测 {s.project.model.measurements.length} 项尺寸</span>
-          ) : null}
-        </div>
-      </section>
+
+      {/* 阶段 A：摄影测量质量报告 */}
+      {(activeStage === 3 || activeStage === null || s.project?.model?.reconstruction) && (
+        <QualityReport />
+      )}
     </aside>
   );
 }

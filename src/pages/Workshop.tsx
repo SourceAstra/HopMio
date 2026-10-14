@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PageHeading } from '../components/PageHeading';
+import { CottageRoomHeading } from '../components/CottageRoomHeading';
 import { useStudio } from '../state/StudioContext';
 import { defaultSpec } from '../theme/modes';
 import type { Spec } from '../types';
@@ -37,8 +37,8 @@ export function Workshop() {
   };
   return (
     <>
-      <PageHeading
-        title="小屋工坊"
+      <CottageRoomHeading
+        room="workshop"
         description="这是你的第一个软件作品。先改一点点，看变化，再认识真正的代码。"
       />
       <div className="two-columns">

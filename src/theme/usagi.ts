@@ -3,4 +3,6 @@ const artRoot = `${import.meta.env.BASE_URL}art/usagi/`;
 export const usagiArt = {
   companion: `${artRoot}companion.png`,
   cottage: `${artRoot}cottage.png`,
+  workroom: `${artRoot}workroom.png`,
+  storyWall: `${artRoot}story-wall-village.png`,
 };

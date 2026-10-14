@@ -1,6 +1,6 @@
 import { CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
-import { PageHeading } from '../components/PageHeading';
+import { CottageRoomHeading } from '../components/CottageRoomHeading';
 import { ModelViewer } from '../components/ModelViewer';
 import { call } from '../api/client';
 import type { Job } from '../types';
@@ -9,8 +9,8 @@ export function Checkup() {
   const report = s.project?.validation;
   return (
     <>
-      <PageHeading
-        title="模型体检室"
+      <CottageRoomHeading
+        room="check"
         description="看看作品装不装得下、有没有网格开口，以及需要家长检查的细节。"
         actions={
           <button

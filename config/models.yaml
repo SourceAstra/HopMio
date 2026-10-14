@@ -2,20 +2,24 @@
 # model_url 是完整端点，协议可选 chat / messages。
 # 密钥只允许环境变量引用；也可留空并在家长设置中保存到系统凭据库。
 schema_version: yaha.models/v1
-default_model: glm-5.3-flash
+default_model: glm-5.3
 models:
   - model_alias: glm-5.3-flash
     model: glm-5.3-flash
     protocol: messages
     model_url: https://open.bigmodel.cn/api/anthropic/v1/messages
-    model_key: ${YAHA_AI_API_KEY}
+    model_key: ${GLM_MODEL_KEY}
     supports_images: true
     timeout_seconds: 600
-    max_tokens: 16384
+    max_tokens: 32768
     reasoning_effort: medium
-  - model_alias: deepseek-chat
-    model: deepseek-chat
-    protocol: chat
-    model_url: https://api.deepseek.com/chat/completions
-    model_key: ${YAHA_DEEPSEEK_API_KEY}
-    supports_images: false
+  - model_alias: glm-5.3
+    model: glm-5.3
+    protocol: messages
+    model_url: https://open.bigmodel.cn/api/anthropic/v1/messages
+    model_key: ${GLM2_MODEL_KEY}
+    supports_images: true
+    timeout_seconds: 600
+    max_tokens: 32768
+    reasoning_effort: medium
+   

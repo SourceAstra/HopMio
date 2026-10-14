@@ -84,6 +84,25 @@ class Projects:
         spec = DesignSpec.model_validate(rev["spec"]).model_dump()
         return self.revision(identifier, spec, rev["model"], "回到之前的版本")
 
+    def select_revision(self, identifier, revision_id):
+        project = self.get(identifier)
+        rev = self.db.get("revisions", revision_id)
+        if not rev or rev["project_id"] != identifier:
+            raise DomainError("这个版本不属于当前作品。")
+        if project["revision_id"] == revision_id:
+            return project
+        project.update(
+            spec=DesignSpec.model_validate(rev["spec"]).model_dump(),
+            model=rev["model"],
+            revision_id=revision_id,
+            updated_at=now(),
+            validation=None,
+            printed=False,
+            slicing=None,
+        )
+        self.db.put("projects", identifier, project)
+        return project
+
     def history(self, identifier):
         self.get(identifier)
         return sorted(

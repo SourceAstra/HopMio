@@ -208,6 +208,26 @@ function useStudioState() {
       setNotice('指定版本已删除。');
       return updated;
     });
+  const selectRevision = async (projectId: string, revisionId: string) =>
+    act(async () => {
+      const updated = await call<Project>('project.select_revision', {
+        id: projectId,
+        revision_id: revisionId,
+      });
+      adopt(updated);
+      setNotice('已切换作品版本，其他版本仍保存在作品柜。');
+      return updated;
+    });
+  const deleteAsset = async (id: string) =>
+    act(async () => {
+      await call('asset.delete', { id });
+      setAssets((old) => old.filter((a) => a.id !== id));
+      setSpec((old) => ({
+        ...old,
+        asset_ids: old.asset_ids.filter((aid) => aid !== id),
+      }));
+      setNotice('素材已从素材架移除。');
+    });
   const generate = async (adjustment?: ModelAdjustment, requestSpec = spec) =>
     act(async () => {
       if (!project) return;
@@ -238,19 +258,35 @@ function useStudioState() {
       setJob(j);
       return j;
     });
-  const organizeIdea = async () =>
+  const organizeIdea = async (overridePrompt?: string) =>
     act(async () => {
-      const snapshot = JSON.stringify(spec);
+      const activePrompt = overridePrompt !== undefined ? overridePrompt : spec.prompt;
+      const targetSpec = overridePrompt !== undefined ? { ...spec, prompt: overridePrompt } : spec;
       const id = currentId.current;
       const revision = currentRevision.current;
       const cloud = !!preferences?.cloud_enabled && !!preferences?.chat_configured;
-      const organized = await call<Spec>('idea.interpret', { prompt: spec.prompt, spec, cloud });
-      if (currentId.current !== id || currentRevision.current !== revision || JSON.stringify(currentSpec.current) !== snapshot) {
+      const organized = await call<Spec>('idea.interpret', { prompt: activePrompt, spec: targetSpec, cloud });
+      if (
+        currentId.current !== id ||
+        currentRevision.current !== revision ||
+        JSON.stringify(currentSpec.current) !== JSON.stringify(spec)
+      ) {
         setNotice('想法、材料或版本已改变，本次整理未覆盖当前设计。');
-        return;
+        return null;
       }
-      setSpec({ ...organized, modeling_plan: null, reconstruction_plan: null });
-      setNotice(cloud ? 'AI 已整理尺寸和要求，请查看乌萨奇的推测建议。' : '已用本地规则整理尺寸和要求，请确认参数；配置并开启 AI 后可智能整理照片。');
+      const updatedSpec: Spec = {
+        ...organized,
+        prompt: activePrompt,
+        modeling_plan: null,
+        reconstruction_plan: null,
+      };
+      setSpec(updatedSpec);
+      setNotice(
+        cloud
+          ? 'AI 已整理尺寸和要求，乌萨奇的推测建议已送达聊天框。'
+          : '已用本地规则整理尺寸和要求，建议已送达聊天框；配置开启 AI 可智能理解照片。'
+      );
+      return updatedSpec;
     });
   const design = async () =>
     act(async () => {
@@ -316,6 +352,8 @@ function useStudioState() {
     updateProject,
     deleteProject,
     deleteRevision,
+    deleteAsset,
+    selectRevision,
     generate,
     organizeIdea,
     design,

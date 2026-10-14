@@ -71,7 +71,7 @@ class GeometryStep(Contract):
     id: Identifier
     name: str = Field(min_length=1, max_length=60)
     operation: Literal["add", "subtract", "intersect"] = "add"
-    shape: Literal["box", "cylinder", "ellipsoid", "star", "polygon", "revolve", "loft", "sweep", "cushion", "cup", "usagi"]
+    shape: Literal["box", "cylinder", "ellipsoid", "star", "polygon", "revolve", "loft", "sweep", "cushion", "cup", "usagi"] = Field(description="usagi 导入完整、已融合的角色网格，内含头、身体、耳朵、左右手臂、脚和表情，不是无四肢的素体。内置部位不能通过删除独立步骤移除；需先用局部 subtract 工具切除目标几何，再按需添加替换部件，保持其他区域不变。其他 shape 为单独几何工具。")
     coordinate_origin: Literal["bounds_center", "local_origin"] = Field(description="bounds_center：原始包围盒中心归零后旋转并平移；local_origin：保留原始局部坐标，旋转后平移。")
     size_mm: tuple[Scalar, Scalar, Scalar] | None = None
     center_mm: tuple[Scalar, Scalar, Scalar] = (0, 0, 0)

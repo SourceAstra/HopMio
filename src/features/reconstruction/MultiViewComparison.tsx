@@ -7,12 +7,14 @@ import type { Model } from '../../types';
 
 interface MultiViewComparisonProps {
   model: Model | null | undefined;
+  modelAssetId?: string | null;
   activeAssetId?: string | null;
   onSelectAsset?: (id: string) => void;
 }
 
 export function MultiViewComparison({
   model,
+  modelAssetId,
   activeAssetId,
   onSelectAsset,
 }: MultiViewComparisonProps) {
@@ -47,7 +49,12 @@ export function MultiViewComparison({
   const currentAsset = s.assets.find((a) => a.id === selectedId);
   const currentPhotoName = currentAsset?.name || `视角照片 ${currentIndex + 1}`;
 
-  const glbId = model?.glb_id || model?.source_glb_id;
+  // 实体模型资产选择：优先使用精修制造实体 manufacturing_glb_id，确保模型真实展现
+  const glbId =
+    modelAssetId ||
+    model?.manufacturing_glb_id ||
+    model?.glb_id ||
+    model?.source_glb_id;
 
   return (
     <div className="multiview-comparison-container">
@@ -131,7 +138,13 @@ export function MultiViewComparison({
             {/* 右侧：自由交互旋转的 3D 模型 */}
             <div className="multiview-3d-pane">
               <span className="viewer-badge">3D 还原实体 (可自由旋转比对)</span>
-              <ModelViewer assetId={glbId} appearance="solid" />
+              {glbId ? (
+                <ModelViewer assetId={glbId} appearance="solid" />
+              ) : (
+                <div className="multiview-empty-hint">
+                  {s.running ? '✦ 乌萨奇正在解算 3D 模型实体…' : '暂无 3D 实体模型'}
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -148,7 +161,7 @@ export function MultiViewComparison({
               className="multiview-overlay-3d"
               style={{ opacity: opacity / 100 }}
             >
-              <ModelViewer assetId={glbId} appearance="solid" />
+              {glbId && <ModelViewer assetId={glbId} appearance="solid" />}
             </div>
           </div>
         )}

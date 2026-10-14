@@ -35,7 +35,7 @@ function getThumbnailRenderer(): THREE.WebGLRenderer | null {
         canvas,
         antialias: true,
         preserveDrawingBuffer: true,
-        alpha: false,
+        alpha: true,
       });
       sharedThumbnailRenderer.setPixelRatio(1);
     } catch (e) {
@@ -46,14 +46,15 @@ function getThumbnailRenderer(): THREE.WebGLRenderer | null {
   return sharedThumbnailRenderer;
 }
 
-export function generateThumbnail(assetId: string): Promise<string> {
-  const cached = thumbnailCache.get(assetId);
+export function generateThumbnail(assetId: string, transparent = false): Promise<string> {
+  const cacheKey = transparent ? `${assetId}:transparent` : assetId;
+  const cached = thumbnailCache.get(cacheKey);
   if (cached) return Promise.resolve(cached);
 
   const task = thumbnailQueue.then(
     () =>
       new Promise<string>((resolve, reject) => {
-        const cachedNow = thumbnailCache.get(assetId);
+        const cachedNow = thumbnailCache.get(cacheKey);
         if (cachedNow) {
           resolve(cachedNow);
           return;
@@ -66,7 +67,7 @@ export function generateThumbnail(assetId: string): Promise<string> {
         }
 
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color('#fffdf7');
+        scene.background = transparent ? null : new THREE.Color('#fffdf7');
         const camera = new THREE.PerspectiveCamera(35, 400 / 300, 0.1, 3000);
         scene.add(new THREE.HemisphereLight(0xffffff, 0xd6cba5, 1.8));
         const light = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -130,7 +131,7 @@ export function generateThumbnail(assetId: string): Promise<string> {
               scene.traverse(disposeObjectSingle);
 
               if (dataUrl && dataUrl.length > 200) {
-                thumbnailCache.set(assetId, dataUrl);
+                thumbnailCache.set(cacheKey, dataUrl);
                 resolve(dataUrl);
               } else {
                 reject(new Error('生成预览失败'));
@@ -160,6 +161,7 @@ export function ModelViewer({
   assetId,
   selectionAssetId,
   compact = false,
+  transparent = false,
   appearance = 'auto',
   onSelectPart,
   selectedPartId,
@@ -167,6 +169,7 @@ export function ModelViewer({
   assetId?: string;
   selectionAssetId?: string;
   compact?: boolean;
+  transparent?: boolean;
   appearance?: 'auto' | 'original' | 'solid';
   onSelectPart?: (partId: string | null, pointMm: [number, number, number]) => void;
   selectedPartId?: string | null;
@@ -190,13 +193,15 @@ export function ModelViewer({
   const [wireframe, setWireframe] = useState(false);
   const [error, setError] = useState('');
   const [snapshot, setSnapshot] = useState<string | null>(() =>
-    compact && assetId ? thumbnailCache.get(assetId) || null : null,
+    compact && assetId ? thumbnailCache.get(transparent ? `${assetId}:transparent` : assetId) || null : null,
   );
 
   useEffect(() => {
-    if (!compact || !assetId || snapshot) return;
+    if (!compact || !assetId) return;
     let active = true;
-    generateThumbnail(assetId)
+    setError('');
+    setSnapshot(thumbnailCache.get(transparent ? `${assetId}:transparent` : assetId) || null);
+    generateThumbnail(assetId, transparent)
       .then((url) => {
         if (active) setSnapshot(url);
       })
@@ -206,7 +211,7 @@ export function ModelViewer({
     return () => {
       active = false;
     };
-  }, [compact, assetId, snapshot]);
+  }, [compact, assetId, transparent]);
 
   useEffect(() => {
     if (compact || !assetId || !host.current) return;
@@ -217,11 +222,15 @@ export function ModelViewer({
     let disposed = false;
     let model: THREE.Object3D | null = null;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#fffdf7');
+    scene.background = transparent ? null : new THREE.Color('#fffdf7');
     const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 3000);
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        preserveDrawingBuffer: true,
+        alpha: transparent,
+      });
     } catch {
       setError('这台设备暂时无法显示 3D，可继续导出模型。');
       return;
@@ -253,9 +262,11 @@ export function ModelViewer({
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
-    const grid = new THREE.GridHelper(180, 18, '#d6d4c2', '#e7e6db');
-    grid.position.y = 0.03;
-    scene.add(grid);
+    if (!transparent) {
+      const grid = new THREE.GridHelper(180, 18, '#d6d4c2', '#e7e6db');
+      grid.position.y = 0.03;
+      scene.add(grid);
+    }
     const selectionMarker = new THREE.Mesh(
       new THREE.SphereGeometry(2.2, 16, 12),
       new THREE.MeshBasicMaterial({ color: '#ef4444', depthTest: false, depthWrite: false }),
@@ -355,6 +366,7 @@ export function ModelViewer({
           const box = new THREE.Box3().setFromObject(model);
           const center = box.getCenter(new THREE.Vector3());
           model.position.set(-center.x, -box.min.y, -center.z);
+          scene.add(model);
           modelRef.current = model;
           fit();
         },
@@ -602,7 +614,7 @@ export function ModelViewer({
   }
 
   return (
-    <div className="viewer">
+    <div className={`viewer ${transparent ? 'viewer-transparent' : ''}`}>
       <div ref={host} className="viewer-canvas" data-testid="model-viewer" />
       {hoveredPart && (
         <div
@@ -635,7 +647,7 @@ export function ModelViewer({
           <Maximize size={17} />
         </button>
       </div>
-      {!compact && (
+      {!compact && !transparent && (
         <div className="viewer-help">
           <Move3D size={14} /> 拖动旋转 · 滚轮缩放 · 右键平移 <span>180 × 180 mm</span>
         </div>

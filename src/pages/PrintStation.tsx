@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PageHeading } from '../components/PageHeading';
+import { CottageRoomHeading } from '../components/CottageRoomHeading';
 import { Simulator } from '../features/printing/Simulator';
 import { ExportButtons } from '../features/printing/ExportButtons';
 export function PrintStation() {
@@ -12,8 +12,8 @@ export function PrintStation() {
   ];
   return (
     <>
-      <PageHeading
-        title="打印站"
+      <CottageRoomHeading
+        room="print"
         description="真正的制造，由你和家长一起完成。小屋不会自动向打印机发送任务。"
       />
       <div className="two-columns">

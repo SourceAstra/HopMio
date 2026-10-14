@@ -55,7 +55,7 @@ Linux 在项目目录执行：
 python3.12 -m venv .venv
 .venv/bin/python -m pip install -r backend/requirements-lock.txt
 pnpm install --frozen-lockfile
-./install-modeling.sh
+./setup.sh
 ./deploy.sh --foreground
 ```
 
@@ -97,7 +97,7 @@ max_output_mb: 40
 tail -f .artifacts/linux/yaha.log
 ```
 
-不依赖 systemd。`YAHA_PYTHON` 可指定引擎解释器，默认优先使用 `.venv/bin/python`；`YAHA_DATA_DIR` 指定作品目录，默认 `.state`；`YAHA_PORT` 指定端口，默认 5173。`YAHA_WEB_DIR` 可指定前端资源目录，新构建统一写入 `.artifacts/web`；已有 `dist` 仅兼容读取。旧 `启动YaHa.sh` 和 `启动HopMio.sh` 转发到 `--start`。脚本不删除作品、不自动终止其他端口占用者；没有系统服务或登录时自动启动。
+不依赖 systemd。`YAHA_PYTHON` 可指定引擎解释器，默认优先使用 `.venv/bin/python`；`YAHA_DATA_DIR` 指定作品目录，默认 `.state`；`YAHA_PORT` 指定端口，默认 5173。`YAHA_WEB_DIR` 可指定前端资源目录，新构建统一写入 `.artifacts/web`；已有 `dist` 仅兼容读取。脚本不删除作品、不自动终止其他端口占用者；没有系统服务或登录时自动启动。
 
 Windows 启动脚本会关闭占用 5173 的旧进程；Linux 端口冲突会直接报错。桌面发布仍是 Windows EXE，现有 `release/` 文件不会因源码修改自动更新。
 

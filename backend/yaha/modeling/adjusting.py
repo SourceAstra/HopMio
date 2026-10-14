@@ -1,6 +1,6 @@
 """自然语言修改当前参数方案；请求与原始造物描述分别保留。"""
 
-from .compiler import compile_plan
+from .compiler import compile_plan, compiled_geometry
 from .planner import apply_plan
 from .references import reference_images
 from ..contracts import DomainError
@@ -35,9 +35,8 @@ def adjust_plan(service, spec, adjustment, project, job):
 
     plan = service.editor.adjust(spec, images, adjustment.instruction, preview, observe, location_image=location_image)
     before, after = compile_plan(previous), compile_plan(plan)
-    parts = lambda compiled: [{key: value for key, value in step.items() if key != "name"} for step in compiled["steps"]]
-    if parts(before) == parts(after) and before["surface"] == after["surface"]:
-        raise DomainError("AI 没有提出可执行的造型改动。请说明具体部位和方向；需要修改已固定参数时先解锁。", "AI_ADJUSTMENT_UNCHANGED")
+    if compiled_geometry(before) == compiled_geometry(after):
+        raise DomainError("建模 AI 返回了与原方案相同的几何，调整未执行，原模型已保留。", "AI_ADJUSTMENT_UNCHANGED")
     changes = [f"{parameter.label}：{previous.parameters[name].value:g} → {parameter.value:g} {parameter.unit}" for name, parameter in plan.parameters.items() if name in previous.parameters and parameter.value != previous.parameters[name].value]
     old_parts = {step["id"]: step for step in before["steps"]}
     changed_parts = [step["name"] for step in after["steps"] if step != old_parts.get(step["id"])]

@@ -306,6 +306,15 @@ export interface SliceReport {
   print_file_sha256: string;
   physical_printed: false;
 }
+export interface AIModelItem {
+  id: string;
+  name: string;
+  model: string;
+  url: string;
+  protocol: 'chat' | 'messages';
+  supports_images: boolean;
+  has_key?: boolean;
+}
 export interface Preferences {
   cloud_enabled: boolean;
   daily_limit: number;
@@ -314,6 +323,8 @@ export interface Preferences {
   chat_protocol?: 'chat' | 'messages';
   chat_registry_configured?: boolean;
   chat_supports_images?: boolean;
+  active_model?: string;
+  models?: AIModelItem[];
   theme: string;
   blender?: { available: boolean; version?: string; message: string };
   slicer?: { available: boolean; version?: string; message: string; executable?: string };

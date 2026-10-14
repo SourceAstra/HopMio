@@ -1,3 +1,4 @@
+import { Trash2 } from 'lucide-react';
 import { PageHeading } from '../components/PageHeading';
 import { Upload } from '../features/materials/Upload';
 import { SelectedMaterials } from '../features/materials/SelectedMaterials';
@@ -86,13 +87,35 @@ export function Materials() {
       </h2>
       <div className="asset-grid">
         {relevant.map((a) => (
-          <button
+          <div
             key={a.id}
             className={`asset-card ${s.spec.asset_ids.includes(a.id) ? 'selected' : ''}`}
             aria-pressed={s.spec.asset_ids.includes(a.id)}
-            disabled={s.busy || s.running}
+            role="button"
+            tabIndex={0}
             onClick={() => toggle(a.id)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggle(a.id);
+              }
+            }}
           >
+            <button
+              type="button"
+              className="asset-delete-btn"
+              title={`从素材架删除 ${a.name}`}
+              aria-label={`从素材架删除 ${a.name}`}
+              disabled={s.busy || s.running}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`确定要从素材架删除“${a.name}”吗？`)) {
+                  void s.deleteAsset(a.id);
+                }
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
             {a.kind === 'image' ? (
               <img src={assetUrl(a.id)} alt={a.name} />
             ) : (
@@ -104,7 +127,7 @@ export function Materials() {
                 ? `已选择 · ${s.spec.asset_ids.indexOf(a.id) + 1}`
                 : `${Math.round(a.bytes / 1024)} KB`}
             </small>
-          </button>
+          </div>
         ))}
       </div>
       {!relevant.length && <p className="empty-state">素材架还是空的，上传第一张灵感吧。</p>}

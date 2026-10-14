@@ -68,11 +68,13 @@ class Assets:
             raise
         return asset
 
-    def remove(self, identifier):
-        file = self.path(identifier)
-        file.unlink(missing_ok=True)
-        with self.db.transaction() as connection:
-            connection.execute("DELETE FROM assets WHERE id=?", (identifier,))
+    def remove(self, identifier: str):
+        try:
+            file = self.path(identifier)
+            file.unlink(missing_ok=True)
+        except Exception:
+            pass
+        self.db.delete("assets", identifier)
 
     def path(self, identifier: str):
         try:

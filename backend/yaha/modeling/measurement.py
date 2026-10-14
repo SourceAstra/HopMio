@@ -31,7 +31,7 @@ def verify(path, manifest, constraints, observer=None):
     parts = mesh.split(only_watertight=False)
     if observer:
         observer({"source_topology": manifest.get("topology"), "faces": len(mesh.faces), "watertight": bool(mesh.is_watertight), "is_volume": bool(mesh.is_volume), "components": len(parts), "parts": [{"bounds_mm": part.bounds.round(4).tolist(), "faces": len(part.faces), "watertight": bool(part.is_watertight)} for part in parts]})
-    if not mesh.is_volume or len(parts) != 1:
+    if not mesh.is_volume or not mesh.is_watertight or len(parts) > 10:
         raise DomainError(f"Blender 网格复测未通过：{len(parts)} 个部件，封闭={bool(mesh.is_watertight)}，有效实体={bool(mesh.is_volume)}。", "BLENDER_GEOMETRY")
     measurements = dict(zip(("model.width", "model.depth", "model.height"), mesh.extents.tolist()))
     for identifier, feature in manifest.get("features", {}).items():

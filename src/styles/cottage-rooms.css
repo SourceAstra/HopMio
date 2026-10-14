@@ -1,0 +1,207 @@
+.cottage-room-heading {
+  --room-color: #746228;
+  --room-paper: rgba(255, 252, 239, 0.94);
+  --room-ink: #4f3824;
+  --room-muted: #7c684e;
+  --room-border: #ddc59b;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: center;
+  min-height: 250px;
+  margin-bottom: 24px;
+  padding: 26px;
+  border: 1px solid var(--room-border);
+  border-radius: 20px;
+  overflow: hidden;
+  background: #f6e4bc;
+  box-shadow: var(--shadow-sm);
+  container-type: inline-size;
+}
+.cottage-room-check {
+  --room-color: #426c4f;
+}
+.cottage-room-prepare {
+  --room-color: #986222;
+}
+.cottage-room-print {
+  --room-color: #476981;
+}
+.cottage-room-workshop {
+  --room-color: #886329;
+}
+.cottage-room-gallery {
+  --room-color: #b45309;
+}
+.cottage-room-library {
+  --room-color: #7c5828;
+}
+.cottage-room-gallery .cottage-room-backdrop {
+  object-position: center 25%;
+}
+.cottage-room-gallery .cottage-room-copy {
+  width: 38%;
+  max-width: 480px;
+  margin-left: 18%;
+  padding: 16px 22px;
+  background: rgba(255, 252, 239, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(221, 197, 155, 0.85);
+  border-radius: 16px;
+  box-shadow:
+    0 6px 20px rgba(70, 45, 15, 0.12),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6);
+}
+body.theme-dark .cottage-room-gallery .cottage-room-copy {
+  background: rgba(43, 38, 30, 0.94);
+  border-color: #7b6242;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+.cottage-room-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
+}
+.cottage-room-copy {
+  position: relative;
+  width: 32%;
+  max-width: 440px;
+  margin-left: 25%;
+  padding: 0;
+  color: var(--room-ink);
+  text-align: left;
+  text-shadow:
+    0 1px 3px #fff4d8,
+    0 0 12px #fff4d8;
+}
+.cottage-room-sign {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--room-color);
+  font-size: 12px;
+  font-weight: 600;
+}
+.cottage-room-copy .page-heading {
+  display: block;
+  margin: 10px 0 0;
+}
+.cottage-room-copy .eyebrow {
+  display: none;
+}
+.cottage-room-copy .page-heading h1 {
+  font-family: 'STKaiti', 'KaiTi', 'Kaiti SC', serif;
+  font-size: 32px;
+  letter-spacing: 0.06em;
+  color: var(--room-ink);
+}
+.cottage-room-copy .page-heading p:not(.eyebrow) {
+  margin-top: 9px;
+  color: var(--room-ink);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.cottage-room-copy .page-heading > button {
+  margin-top: 14px;
+  padding: 9px 18px;
+  font-size: 13px;
+}
+.cottage-room-companion {
+  position: absolute;
+  bottom: 20px;
+  right: 30px;
+  width: 185px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.cottage-room-companion .usagi-character {
+  width: 145px;
+  height: auto;
+  filter: drop-shadow(0 5px 3px rgba(80, 50, 15, 0.18));
+}
+.cottage-room-companion p {
+  padding: 7px 10px;
+  border: 1px solid var(--room-border);
+  border-radius: 8px;
+  background: var(--room-paper);
+  color: var(--room-ink);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+body.theme-dark .cottage-room-heading {
+  --room-paper: rgba(43, 38, 30, 0.96);
+  --room-ink: #f5e6c7;
+  --room-muted: #cebd9f;
+  --room-border: #7b6242;
+  --room-color: #efd197;
+}
+body.theme-dark .cottage-room-backdrop {
+  filter: brightness(0.6) saturate(0.8);
+}
+body.theme-dark .cottage-room-copy {
+  text-shadow:
+    0 1px 3px #292117,
+    0 0 12px #292117;
+}
+@container (max-width: 900px) {
+  .cottage-room-copy {
+    margin-left: 8%;
+    width: 50%;
+  }
+}
+@media (max-width: 1000px) {
+  .cottage-room-heading {
+    padding: 20px;
+  }
+  .cottage-room-companion {
+    right: 16px;
+    width: 150px;
+  }
+  .cottage-room-companion .usagi-character {
+    width: 120px;
+  }
+}
+@media (max-width: 640px) {
+  .cottage-room-backdrop {
+    object-position: 30% center;
+  }
+  .cottage-room-heading {
+    min-height: 300px;
+    padding: 22px 18px 115px;
+    border-radius: 15px;
+  }
+  .cottage-room-copy {
+    width: 100%;
+    max-width: none;
+    margin-left: 0;
+    padding: 0;
+  }
+  .cottage-room-copy .page-heading h1 {
+    font-size: 25px;
+  }
+  .cottage-room-companion {
+    top: auto;
+    bottom: 8px;
+    right: 14px;
+    width: auto;
+    flex-direction: row-reverse;
+    align-items: center;
+    gap: 10px;
+  }
+  .cottage-room-companion .usagi-character {
+    width: 95px;
+  }
+  .cottage-room-companion p {
+    max-width: 150px;
+    font-size: 10px;
+  }
+}

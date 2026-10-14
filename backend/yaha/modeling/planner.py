@@ -5,7 +5,7 @@ import base64
 import json
 from pydantic import ValidationError
 from .contracts import GeometryPlan
-from .compiler import compile_plan
+from .compiler import compile_plan, compiled_geometry
 from .prompts import render_prompts
 from .references import reference_images
 from ..ai.client import JSONModelClient
@@ -66,6 +66,10 @@ class CloudModelingPlanner:
                 if not plan.constraints:
                     raise DomainError("AI 方案缺少可复测尺寸。", "AI_PLAN_INVALID")
                 compiled = compile_plan(plan)
+                if adjustment and spec.modeling_plan:
+                    previous = compile_plan(spec.modeling_plan)
+                    if compiled_geometry(compiled) == compiled_geometry(previous):
+                        raise DomainError("建模 AI 返回了与原方案相同的几何，调整未执行，原模型已保留。必须修改实际几何步骤，不能只改说明。", "AI_ADJUSTMENT_UNCHANGED")
                 for step, compiled_step in zip(plan.steps, compiled["steps"]):
                     if step.shape == "loft":
                         step.size_mm = tuple(compiled_step["size_mm"])
@@ -76,8 +80,8 @@ class CloudModelingPlanner:
                     detail = error.errors(include_input=False, include_url=False)[0]
                     message = "AI 方案字段无效：" + ".".join(str(part) for part in detail["loc"]) + "（" + detail["msg"] + "）。"
                 if attempt:
-                    raise DomainError(message, "AI_PLAN_INVALID") from None
-                correction = {"error": message, "plan": json.dumps(data, ensure_ascii=False)}
+                    raise DomainError(message, error.code if isinstance(error, DomainError) and error.code == "AI_ADJUSTMENT_UNCHANGED" else "AI_PLAN_INVALID") from None
+                correction = {"error": message + (" 本次局部调整请求：" + adjustment if adjustment else ""), "plan": json.dumps(data, ensure_ascii=False)}
         plan.source_prompt = spec.prompt
         plan.source_asset_ids = list(spec.asset_ids)
         return plan

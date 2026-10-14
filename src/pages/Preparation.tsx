@@ -1,5 +1,5 @@
 import { useStudio } from '../state/StudioContext';
-import { PageHeading } from '../components/PageHeading';
+import { CottageRoomHeading } from '../components/CottageRoomHeading';
 import { ExportButtons } from '../features/printing/ExportButtons';
 import { call } from '../api/client';
 import type { Profile } from '../types';
@@ -8,8 +8,8 @@ export function Preparation() {
   const update = (p: Partial<Profile>) => s.setProfile((old) => ({ ...old, ...p }));
   return (
     <>
-      <PageHeading
-        title="打印准备台"
+      <CottageRoomHeading
+        room="prepare"
         description="选择实际喷嘴与材料，生成本地切片，再和家长检查打印预览。"
       />
       <div className="two-columns">
