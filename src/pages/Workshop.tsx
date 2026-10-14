@@ -7,7 +7,7 @@ export function Workshop() {
   const s = useStudio();
   const [code, setCode] = useState(
     JSON.stringify(
-      { template: 'usagi', height_mm: 80, width_mm: 48, depth_mm: 36, ear_scale: 1.2, base: true },
+      { template: 'usagi', height_mm: 80, width_mm: 48, depth_mm: 36, base: true },
       null,
       2,
     ),
@@ -20,8 +20,8 @@ export function Workshop() {
         'height_mm',
         'width_mm',
         'depth_mm',
-        'ear_scale',
         'thickness_mm',
+        'bottom_mm',
         'base',
         'hole',
         'hole_shape',
@@ -44,8 +44,8 @@ export function Workshop() {
       <div className="two-columns">
         <section className="panel form-panel">
           <span className="pill">练习 01 · 认识参数</span>
-          <h2>给乌萨奇改一双耳朵</h2>
-          <p>把 ear_scale 从 1.2 改成 1.6。把 base 改成 true，乌萨奇就有底座了。</p>
+          <h2>给乌萨奇改一个尺寸</h2>
+          <p>把 height_mm 从 80 改成 100。把 base 改成 true，乌萨奇就有底座了。</p>
           <textarea
             className="code-editor"
             aria-label="造物参数代码"
@@ -66,9 +66,9 @@ export function Workshop() {
             <p>找到 --accent，试一试自己喜欢的黄色。</p>
           </div>
           <div className="lesson">
-            <strong>🐰 修改乌萨奇形状</strong>
-            <code>backend/yaha/geometry/usagi.py</code>
-            <p>修改椭球的位置和半径，先和家长读懂 usagi 函数。</p>
+            <strong>🧩 修改造物参数</strong>
+            <code>backend/yaha/modeling/templates.py</code>
+            <p>修改参数和部件关系，交给 Blender 完成实际几何。</p>
           </div>
           <div className="lesson">
             <strong>🏡 修改房间名字</strong>

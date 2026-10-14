@@ -3,7 +3,7 @@
 import json
 import uuid
 from datetime import datetime, timezone
-from ..contracts import DomainError
+from ..contracts import DesignSpec, DomainError
 
 
 def now():
@@ -28,6 +28,7 @@ class Projects:
             "model": None,
             "validation": None,
             "printed": False,
+            "slicing": None,
         }
         self.db.put("projects", project["id"], project)
         return project
@@ -36,11 +37,12 @@ class Projects:
         project = self.db.get("projects", identifier)
         if not project:
             raise DomainError("这个项目暂时找不到，请回作品柜看看。")
+        project["spec"] = DesignSpec.model_validate(project["spec"]).model_dump()
         return project
 
     def list(self):
         return sorted(
-            self.db.list("projects"), key=lambda p: p["updated_at"], reverse=True
+            [self.get(p["id"]) for p in self.db.list("projects")], key=lambda p: p["updated_at"], reverse=True
         )
 
     def revision(self, identifier, spec, model, reason):
@@ -62,6 +64,7 @@ class Projects:
             updated_at=now(),
             validation=None,
             printed=False,
+            slicing=None,
         )
         with self.db.transaction() as conn:
             conn.execute(
@@ -78,7 +81,8 @@ class Projects:
         rev = self.db.get("revisions", revision_id)
         if not rev or rev["project_id"] != identifier:
             raise DomainError("这个版本不属于当前作品。")
-        return self.revision(identifier, rev["spec"], rev["model"], "回到之前的版本")
+        spec = DesignSpec.model_validate(rev["spec"]).model_dump()
+        return self.revision(identifier, spec, rev["model"], "回到之前的版本")
 
     def history(self, identifier):
         self.get(identifier)

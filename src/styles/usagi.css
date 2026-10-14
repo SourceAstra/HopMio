@@ -3,49 +3,62 @@
   object-fit: contain;
   flex-shrink: 0;
   user-select: none;
-  filter: drop-shadow(0 2px 1px #b6923820);
+  filter: drop-shadow(0 3px 8px rgba(180, 140, 50, 0.16));
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
 .cottage-art {
   display: block;
   object-fit: contain;
   user-select: none;
   max-width: 100%;
-  height: 154px;
+  height: 110px;
+  filter: drop-shadow(0 4px 12px rgba(180, 140, 50, 0.12));
 }
+
 .inspiration > .usagi-character {
   transform: rotate(-4deg);
-  filter: drop-shadow(2px 3px 1px #bf9b4830);
+  filter: drop-shadow(2px 5px 10px rgba(190, 150, 60, 0.22));
 }
+
+.inspiration:hover > .usagi-character {
+  transform: rotate(2deg) scale(1.05);
+}
+
 .desk-companion {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 14px;
 }
+
 .desk-companion > .usagi-character {
-  transform: rotate(5deg);
+  transform: rotate(4deg);
 }
-.sidebar-gallery {
-  background: linear-gradient(#fffef0, #fff3c2);
-  border-color: #fffdf5;
+
+.desk-companion:hover > .usagi-character {
+  transform: rotate(-3deg) scale(1.06);
 }
-.gallery-banner {
-  background:
-    radial-gradient(circle at 85% 40%, #fffef4 0 14%, transparent 15%),
-    linear-gradient(110deg, #ffeaa0, #fff8e2);
-  border: 1px solid #ebd49f;
-}
+
 .gallery-banner > .usagi-character {
-  width: 140px;
-  height: 160px;
+  width: 130px;
+  height: 150px;
   transform: rotate(-4deg);
 }
-.avatar .usagi-character {
-  width: 29px;
-  height: 35px;
+
+.gallery-banner:hover > .usagi-character {
+  transform: rotate(2deg) scale(1.04);
 }
+
+.avatar-btn .usagi-character {
+  width: 32px;
+  height: 38px;
+}
+
+
 @media (max-width: 1250px) {
   .desk-companion > .usagi-character {
-    width: 55px;
-    height: 65px;
+    width: 58px;
+    height: 68px;
   }
 }
+

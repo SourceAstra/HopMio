@@ -1,10 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { enginePlugin } from './desktop/dev-plugin.ts';
+
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
-    enginePlugin(),
     {
       name: 'yaha-production-policy',
       transformIndexHtml(html) {
@@ -17,6 +16,6 @@ export default defineConfig(({ command }) => ({
     },
   ],
   base: './',
-  build: { outDir: '.artifacts/web' },
+  build: { outDir: 'dist' },
   server: { host: '127.0.0.1', port: 5173, strictPort: true },
 }));

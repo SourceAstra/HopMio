@@ -1,11 +1,13 @@
 """导出是真实文件；3MF 使用毫米，不携带虚构切片参数。"""
 
 import io
+import hashlib
 import json
 import zipfile
 from xml.etree import ElementTree as ET
 from .geometry.models import load_mesh
 from .contracts import DomainError
+from .package_contract import MODEL_FILES
 
 
 def three_mf(mesh):
@@ -43,44 +45,52 @@ def three_mf(mesh):
 def export_project(project, assets, format):
     if not project["model"]:
         raise DomainError("先造出一个模型，再打包带走吧。")
-    if format in ("stl", "glb"):
-        identifier = project["model"][f"{format}_id"]
+    if format == "print3mf":
+        report = project.get("slicing")
+        if not report or report["revision_id"] != project["revision_id"]:
+            raise DomainError("当前模型尚未完成实际切片。")
+        return assets.db.get("assets", report["asset_id"])
+    if format in ("stl", "glb", "blend", "source_glb", "manufacturing_glb"):
+        identifier = project["model"].get(f"{format}_id")
+        if not identifier:
+            raise DomainError("这个旧版本没有 Blender 源工程，请生成新版本。")
         return assets.db.get("assets", identifier)
     if format == "3mf":
         mesh = load_mesh(assets.path(project["model"]["stl_id"]))
         content = three_mf(mesh)
     elif format == "usagi":
         out = io.BytesIO()
+        files = {"model." + extension: assets.path(project["model"][extension + "_id"]).read_bytes() for extension in ("stl", "glb")}
+        for name, (key, _) in MODEL_FILES.items():
+            if project["model"].get(key):
+                files[name] = assets.path(project["model"][key]).read_bytes()
+        for index, identifier in enumerate(project["spec"].get("asset_ids", [])):
+            original = assets.path(identifier)
+            files[f"inputs/{index}{original.suffix}"] = original.read_bytes()
+        report = project.get("slicing")
+        if report and report["revision_id"] == project["revision_id"]:
+            files["print.gcode.3mf"] = assets.path(report["asset_id"]).read_bytes()
+            files["slice-report.json"] = assets.path(report["report_id"]).read_bytes()
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(
                 "project.json",
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 3,
                         "name": project["name"],
                         "spec": project["spec"],
                         "story": project["story"],
+                        "model": project["model"],
+                        "slicing": report,
+                        "files": {name: {"sha256": hashlib.sha256(content).hexdigest(), "bytes": len(content)} for name, content in files.items()},
                     },
                     ensure_ascii=False,
                 ),
             )
-            for format in ("stl", "glb"):
-                archive.writestr(
-                    "model." + format,
-                    assets.path(project["model"][f"{format}_id"]).read_bytes(),
-                )
-            if project["model"].get("source_stl_id"):
-                archive.writestr(
-                    "source.stl",
-                    assets.path(project["model"]["source_stl_id"]).read_bytes(),
-                )
-            for index, identifier in enumerate(project["spec"].get("asset_ids", [])):
-                original = assets.path(identifier)
-                archive.writestr(
-                    f"inputs/{index}{original.suffix}", original.read_bytes()
-                )
+            for name, content in files.items():
+                archive.writestr(name, content)
         content = out.getvalue()
         format = "usagi"
     else:
-        raise DomainError("支持 STL、3MF、GLB 和 .usagi 作品包。")
+        raise DomainError("支持 STL、3MF、GLB、Blender 源工程和 .usagi 作品包。")
     return assets.write(content, "." + format, project["name"] + "." + format, "export")

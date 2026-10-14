@@ -5,7 +5,6 @@ import { Usagi } from './components/Usagi';
 import { Workbench } from './pages/Workbench';
 import { Hall } from './pages/Hall';
 import { Materials } from './pages/Materials';
-import { Idea } from './pages/Idea';
 import { Checkup } from './pages/Checkup';
 import { Preparation } from './pages/Preparation';
 import { PrintStation } from './pages/PrintStation';
@@ -13,12 +12,12 @@ import { Library } from './pages/Library';
 import { Gallery } from './pages/Gallery';
 import { Workshop } from './pages/Workshop';
 import { Settings } from './pages/Settings';
-import { JobProgress } from './components/JobProgress';
+import { Inspirations } from './pages/Inspirations';
 const pages = {
   desk: Workbench,
   hall: Hall,
+  inspirations: Inspirations,
   materials: Materials,
-  idea: Idea,
   check: Checkup,
   prepare: Preparation,
   print: PrintStation,
@@ -37,10 +36,7 @@ export function App() {
         <Sidebar />
         <main>
           {s.ready ? (
-            <>
-              {s.room !== 'desk' && <JobProgress />}
-              <Page />
-            </>
+            <Page />
           ) : (
             <div className="loading">
               <Usagi size={130} />

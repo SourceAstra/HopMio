@@ -23,7 +23,8 @@ export async function download(id: string, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export async function fileBase64(file: File) {
-  if (file.size > 12 * 1024 * 1024) throw new Error('材料超过 12 MB，请先压缩。');
+  const limit = file.name.toLowerCase().endsWith('.usagi') ? 256 : 12;
+  if (file.size > limit * 1024 * 1024) throw new Error(`文件超过 ${limit} MB，请先压缩。`);
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1]);

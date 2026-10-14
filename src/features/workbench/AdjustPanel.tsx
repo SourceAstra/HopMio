@@ -1,9 +1,21 @@
-import { SlidersHorizontal, RotateCcw, Lightbulb, Layers, Printer } from 'lucide-react';
+import { SlidersHorizontal, RotateCcw, Layers, Scissors, Blocks } from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
+import { ParameterEditor } from '../modeling/ParameterEditor';
 import type { Spec } from '../../types';
-export function AdjustPanel() {
+import { QualityReport } from '../reconstruction/QualityReport';
+import { isPhotoMode } from '../../theme/modes';
+
+export function AdjustPanel({
+  selectedPartId,
+  selectedPointMm,
+}: {
+  selectedPartId?: string | null;
+  selectedPointMm?: [number, number, number] | null;
+} = {}) {
   const s = useStudio();
   const patch = (data: Partial<Spec>) => s.setSpec((old) => ({ ...old, ...data }));
+  const selectedPart = s.spec.modeling_plan?.steps.find((step) => step.id === selectedPartId);
+
   const field = (
     name: keyof Spec,
     label: string,
@@ -39,100 +51,178 @@ export function AdjustPanel() {
   );
   return (
     <aside className="adjust-stack">
-      <section className="panel">
-        <div className="panel-title">
-          <h2>
-            <SlidersHorizontal size={20} /> 调整作品
-          </h2>
+      {/* 阶段 B：Blender 工业制造精修与切平控制 */}
+      {isPhotoMode(s.spec.mode) && (
+        <section className="panel stage-b-tuning-panel">
+          <div className="panel-title">
+            <h2>
+              <Scissors size={18} /> 阶段 B: Blender 切平定标
+            </h2>
+            <span className="pill success">Bed Cut 刀刃切平</span>
+          </div>
+          <p className="tuning-desc">
+            接管阶段 A 裸网格：执行微破洞缝合、拉普拉斯微光顺与<strong>打印床水平切平</strong>，消除悬空点，确保首层 100% 牢固附着。
+          </p>
+          <div className="tuning-items">
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={s.spec.base}
+                onChange={(e) => patch({ base: e.target.checked })}
+              />
+              <strong>加厚稳固打印基座 (Bed Plate)</strong>
+            </label>
+            <div className="tuning-metric-row">
+              <span>接触面平整度</span>
+              <strong className="text-green">Bed Cut: 水平校准</strong>
+            </div>
+            <div className="tuning-metric-row">
+              <span>毫米级定标尺寸</span>
+              <strong>{s.spec.height_mm || 80} mm 物理约束</strong>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {!isPhotoMode(s.spec.mode) && (
+        <section className="panel">
+          <div className="panel-title">
+            <h2>
+              <SlidersHorizontal size={20} /> 调整作品
+            </h2>
+            <button
+              className="link"
+              disabled={!s.project}
+              onClick={() => s.project && s.setSpec(s.project.spec)}
+            >
+              <RotateCcw size={14} /> 撤销修改
+            </button>
+          </div>
+
+          {s.spec.provider === 'parametric' ? (
+            <>
+              <ParameterEditor selectedPartId={selectedPartId} />
+              {(selectedPart || selectedPointMm) && (
+                <div className="selected-part-actions">
+                  <strong>已选中：{selectedPart?.name || '模型表面位置'}</strong>
+                  {selectedPointMm && <small>X/Y/Z {selectedPointMm.map((value) => value.toFixed(1)).join(' / ')} mm。AI 微调会优先检查此处。</small>}
+                </div>
+              )}
+              <div className="adjust-actions">
+                <button
+                  type="button"
+                  className="primary generate adjust-apply-btn"
+                  disabled={s.running || s.busy || !s.canGenerate}
+                  onClick={() => void s.generate()}
+                  title="按修改后的参数在本地 Blender 重新生成模型（不消耗云端 AI）"
+                >
+                  <Blocks size={16} /> {s.dirty ? '应用修改 · 重新生成模型' : '重新生成 3D 模型'}
+                </button>
+              </div>
+              <p className="muted">
+                {s.spec.modeling_plan
+                  ? '只修改方案参数；部件尺寸和壁厚由方案关系推导。生成不调用 AI。'
+                  : '先让 AI 设计方案，再在这里确认和调整参数。'}
+              </p>
+            </>
+          ) : s.spec.mode === 'import' ? (
+            <p className="muted">导入模型保留原始尺寸。在体检室可通过 Blender 修复网格。</p>
+          ) : (
+            <>
+              {field('height_mm', '高度', 10, 170, 1, 'mm')}
+              {field(
+                'width_mm',
+                s.spec.template === 'cup' && s.spec.mode === 'text' ? '外径' : '宽度',
+                10,
+                170,
+                1,
+                'mm',
+              )}
+              {s.spec.mode === 'text' &&
+                !['cup', 'plaque'].includes(s.spec.template) &&
+                field('depth_mm', '深度', 5, 170, 1, 'mm')}
+              {(s.spec.mode !== 'text' || ['cup', 'plaque'].includes(s.spec.template)) &&
+                field(
+                  'thickness_mm',
+                  s.spec.template === 'cup' ? '壁厚' : '厚度',
+                  0.8,
+                  10,
+                  0.2,
+                  'mm',
+                )}
+              {s.spec.mode === 'text' &&
+                s.spec.template === 'cup' &&
+                field('bottom_mm', '底厚', 0.8, 10, 0.2, 'mm')}
+              <div className="toggle-row">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={s.spec.base}
+                    onChange={(e) => patch({ base: e.target.checked })}
+                  />{' '}
+                  加底座
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={s.spec.hole}
+                    onChange={(e) => patch({ hole: e.target.checked })}
+                  />{' '}
+                  开挂孔
+                </label>
+              </div>
+              {s.spec.hole && (
+                <div className="pill-choice-row" role="radiogroup" aria-label="挂孔形状">
+                  <button
+                    type="button"
+                    className={`choice-pill ${s.spec.hole_shape !== 'heart' ? 'active' : ''}`}
+                    onClick={() => patch({ hole_shape: 'round' })}
+                  >
+                    圆形孔
+                  </button>
+                  <button
+                    type="button"
+                    className={`choice-pill ${s.spec.hole_shape === 'heart' ? 'active' : ''}`}
+                    onClick={() => patch({ hole_shape: 'heart' })}
+                  >
+                    爱心孔
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          <small className="muted">
+            {s.dirty ? '参数待应用：生成后保存为新版本。' : '当前参数已经保存。'}
+          </small>
+        </section>
+      )}
+      <QualityReport />
+      <section className="panel version-card compact">
+        <div className="version-card-header">
+          <div className="version-title-wrap">
+            <Layers size={15} />
+            <strong>版本 {String(s.project?.revision_count || 0).padStart(2, '0')}</strong>
+          </div>
+          {s.project?.model && (
+            <span className="pill success">
+              {s.project.model.faces.toLocaleString()} 面
+            </span>
+          )}
           <button
-            className="link"
-            disabled={!s.project}
-            onClick={() => s.project && s.setSpec(s.project.spec)}
+            type="button"
+            className="link version-link"
+            onClick={() => s.setRoom('library')}
+            title="查看作品版本历史"
           >
-            <RotateCcw size={14} /> 撤销修改
+            版本历史 →
           </button>
         </div>
-        {field('height_mm', '高度', 10, 170, 1, 'mm')}
-        {field('width_mm', '宽度', 10, 170, 1, 'mm')}
-        {field('depth_mm', '深度', 5, 170, 1, 'mm')}
-        {field('thickness_mm', '厚度', 0.8, 10, 0.2, 'mm')}
-        {['usagi', 'bunny'].includes(s.spec.template) &&
-          s.spec.mode === 'text' &&
-          s.spec.provider === 'local' &&
-          field('ear_scale', '耳朵加长', 0.7, 2, 0.1, '倍')}
-        <div className="toggle-row">
-          <label>
-            <input
-              type="checkbox"
-              checked={s.spec.base}
-              onChange={(e) => patch({ base: e.target.checked })}
-            />{' '}
-            加底座
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={s.spec.hole}
-              onChange={(e) => patch({ hole: e.target.checked })}
-            />{' '}
-            开挂孔
-          </label>
+        <div className="version-card-meta">
+          <span>{s.project?.model?.origin || '尚未生成模型'}</span>
+          {s.project?.model?.measurements?.length ? (
+            <span> · 已复测 {s.project.model.measurements.length} 项尺寸</span>
+          ) : null}
         </div>
-        {s.spec.hole && (
-          <select
-            aria-label="挂孔形状"
-            value={s.spec.hole_shape}
-            onChange={(e) => patch({ hole_shape: e.target.value })}
-          >
-            <option value="round">圆形孔</option>
-            <option value="heart">爱心孔</option>
-          </select>
-        )}
-        <small className="muted">
-          {s.dirty ? '参数待应用：生成后保存为新版本。' : '当前参数已经保存。'}{' '}
-          云端自由模型重新生成会消耗额度。
-        </small>
-      </section>
-      {s.project?.model &&
-        (s.spec.provider === 'meshy' || ['image', 'multiview', 'import'].includes(s.spec.mode)) && (
-          <button
-            className="secondary"
-            disabled={s.busy || s.running}
-            onClick={() => void s.generate(false, true)}
-          >
-            本地调整尺寸 / 底座 / 挂孔
-          </button>
-        )}
-      <section className="panel print-tip">
-        <h2>
-          <Lightbulb size={21} /> 打印小贴士
-        </h2>
-        <p>
-          <Printer size={20} /> 拓竹 A1 mini · 单色
-        </p>
-        <p>
-          材料 <strong>{s.profile.material}</strong>
-          <span>180 × 180 × 180 mm</span>
-        </p>
-        <div className="soft-notice">
-          {s.project?.validation?.can_prepare
-            ? '基础体检通过，继续检查切片与支撑。'
-            : '模型体检后再进入打印准备。'}
-        </div>
-      </section>
-      <section className="panel version-card">
-        <h2>
-          <Layers size={20} /> 版本 {String(s.project?.revision_count || 0).padStart(2, '0')}
-        </h2>
-        <p>{s.project?.model?.origin || '还没有模型'}</p>
-        <span className="pill">
-          {s.project?.model
-            ? `${s.project.model.faces.toLocaleString()} 个三角面`
-            : '等待第一次造物'}
-        </span>
-        <button className="link" onClick={() => s.setRoom('library')}>
-          查看作品与版本 →
-        </button>
       </section>
     </aside>
   );

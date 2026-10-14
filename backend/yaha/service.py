@@ -5,58 +5,73 @@ from .starter import ensure_starter
 
 import threading
 from pathlib import Path
-from .contracts import DesignSpec, PrintProfile, DomainError
+from .contracts import DesignSpec, ModelAdjustment, PrintProfile, DomainError
 from .storage.database import Database
 from .storage.assets import Assets
 from .storage.projects import Projects
 from .settings import Settings
 from .jobs import Jobs
-from .geometry.models import load_mesh, save_model
-from .ai.meshy import Meshy
-from .ai.understanding import interpret
+from .modeling.backend import ModelingBackend
+from .modeling.blender_backend import BlenderBackend
+from .ai.understanding import interpret, suggest_adjustment
+from .ai.client import CloudJSONClient
+from .modeling.planner import CloudModelingPlanner, ModelingPlanner, ModelingReviewer, ModelingEditor, start_design
+from .modeling.outlines import OpenCVOutlineFitter, OutlineFitter
+from .modeling.assessment import CloudPhotoAssessor, PhotoAssessor
+from .reconstruction.planner import start_design as start_surface_design
+from .reconstruction.backend import SurfaceBackend
+from .reconstruction.observations import OpenCVPhotoObserver
+from .slicing.service import start_slice
+from .slicing.runtime import availability as slicer_status
 from .validation import inspect, profile_hash
 from .exporting import export_project
 
 
 class Service:
-    def __init__(self, root):
+    def __init__(self, root, planner: ModelingPlanner | None = None, modeler: ModelingBackend | None = None, reviewer: ModelingReviewer | None = None, outline_fitter: OutlineFitter | None = None, editor: ModelingEditor | None = None, assessor: PhotoAssessor | None = None):
         self.db = Database(Path(root))
         self.assets = Assets(self.db)
         self.projects = Projects(self.db)
         self.settings = Settings(self.db)
         self.jobs = Jobs(self.db)
-        self.meshy = Meshy(self.settings, self.assets)
+        for asset in self.db.list("assets"):
+            if asset.get("kind") == "model-draft":
+                self.assets.remove(asset["id"])
+        self.modeler = modeler or BlenderBackend()
+        self.modelers = {"local": self.modeler, "parametric": self.modeler, "reconstruction": SurfaceBackend(self.modeler)}
+        self.plan_operations = {"parametric": start_design, "reconstruction": start_surface_design}
+        self.photo_observer = OpenCVPhotoObserver()
+        client = CloudJSONClient(self.settings)
+        cloud = CloudModelingPlanner(client)
+        self.assessor: PhotoAssessor | None = assessor or (CloudPhotoAssessor(client) if planner is None else None)
+        self.planner: ModelingPlanner = planner or cloud
+        self.reviewer: ModelingReviewer | None = reviewer or (cloud if planner is None else None)
+        self.editor: ModelingEditor | None = editor or (cloud if planner is None else None)
+        self.outline_fitter: OutlineFitter = outline_fitter or OpenCVOutlineFitter()
         self.lock = threading.RLock()
 
     def bootstrap(self):
         ensure_starter(self)
         return {
             "projects": self.projects.list(),
-            "settings": self.settings.public(),
+            "settings": self.settings.public() | self.runtime_status(),
             "profile": self.db.get("settings", "profile")
             or PrintProfile().model_dump(),
             "assets": self.db.list("assets"),
             "jobs": self.db.list("jobs"),
         }
 
-    def generate(self, identifier, data, concept=False, adjust=False, resume=None):
-        return start_generation(self, identifier, data, concept, adjust, resume)
+    def close(self):
+        self.jobs.close()
+        self.db.close()
+
+    def runtime_status(self):
+        return {"blender": self.modeler.status(), "reconstruction": self.modelers["reconstruction"].status(), "slicer": slicer_status()}
+
+    def generate(self, identifier, data, repair=False, *, adjustment=None, auto_photo=False):
+        return start_generation(self, identifier, data, repair, adjustment=adjustment, auto_photo=auto_photo)
 
     def call(self, method, p):
-        if method == "job.resume":
-            job = self.jobs.get(p["id"])
-            if job["status"] not in ("failed", "interrupted", "canceled") or not all(
-                k in job for k in ("remote_id", "remote_path", "spec")
-            ):
-                raise DomainError(
-                    "这个任务没有可恢复的云端编号。请检查服务记录，勿重复提交。"
-                )
-            return self.generate(
-                job["project_id"],
-                job["spec"],
-                concept=job["kind"] == "concept",
-                resume=job,
-            )
         if method == "bootstrap":
             return self.bootstrap()
         if method == "project.create":
@@ -97,12 +112,26 @@ class Service:
                 self.assets,
                 p.get("cloud", False),
             )
+        if method == "idea.adjustment":
+            spec = DesignSpec.model_validate(p.get("spec", {})).model_dump()
+            if not spec.get("modeling_plan"):
+                raise DomainError(
+                    "当前作品没有可编辑的 AI 参数方案，请先完成一键建模。",
+                    "AI_ADJUSTMENT_UNAVAILABLE",
+                )
+            return suggest_adjustment(p.get("instruction", ""), spec, self.settings, self.assets, p.get("location_asset_id"), p.get("location_point"))
         if method == "model.generate":
-            return self.generate(p["id"], p["spec"])
+            return self.generate(p["id"], p["spec"], auto_photo=p.get("auto_photo", True) is True)
         if method == "model.adjust":
-            return self.generate(p["id"], p["spec"], adjust=True)
-        if method == "model.concept":
-            return self.generate(p["id"], p["spec"], True)
+            return self.generate(p["id"], p["spec"], adjustment=ModelAdjustment.model_validate(p["adjustment"]))
+        if method == "model.slice":
+            return start_slice(self, p["id"], p["profile"])
+        if method == "model.plan":
+            spec = DesignSpec.model_validate(p["spec"])
+            operation = self.plan_operations.get(spec.provider)
+            if operation is None:
+                raise DomainError("请选择参数设计或照片表面重建。")
+            return operation(self, p["id"], spec.model_dump())
         if method == "job.get":
             return self.jobs.get(p["id"])
         if method == "job.cancel":
@@ -127,6 +156,8 @@ class Service:
                     "profile_hash"
                 ] != profile_hash(value):
                     self.projects.update(project["id"], validation=None)
+                if project.get("slicing") and project["slicing"]["profile_hash"] != profile_hash(value):
+                    self.projects.update(project["id"], slicing=None)
             return value
         if method == "project.export":
             return export_project(self.projects.get(p["id"]), self.assets, p["format"])
@@ -135,44 +166,30 @@ class Service:
 
             return import_package(p["base64"], self.assets, self.projects)
         if method == "model.repair":
-            with self.lock:
-                project = self.projects.get(p["id"])
-                if not project["model"]:
-                    raise DomainError("还没有模型可以修复。")
-                mesh = load_mesh(self.assets.path(project["model"]["stl_id"]))
-                import trimesh
-
-                trimesh.repair.fix_normals(mesh)
-                trimesh.repair.fill_holes(mesh)
-                model = save_model(mesh, self.assets, "基础网格修复")
-                return self.projects.revision(
-                    project["id"],
-                    project["spec"],
-                    model,
-                    "修正法线并尝试补小孔，需重新体检",
-                )
+            project = self.projects.get(p["id"])
+            return self.generate(project["id"], project["spec"], repair=True)
         if method == "settings.get":
-            return self.settings.public()
+            return self.settings.public() | self.runtime_status()
         if method == "settings.unlock":
             return self.settings.unlock(p["pin"])
         if method == "settings.update":
-            return self.settings.update(p["token"], p["values"])
+            return self.settings.update(p["token"], p["values"]) | self.runtime_status()
         if method == "workshop.templates":
             return [
                 {
                     "id": "usagi",
                     "name": "乌萨奇 · 呀哈摆件",
-                    "source": "backend/yaha/geometry/templates.py",
+                    "source": "backend/yaha/modeling/templates.py",
                 },
                 {
                     "id": "cup",
                     "name": "我的笔筒",
-                    "source": "backend/yaha/geometry/templates.py",
+                    "source": "backend/yaha/modeling/templates.py",
                 },
                 {
                     "id": "plaque",
                     "name": "小屋名牌",
-                    "source": "backend/yaha/geometry/templates.py",
+                    "source": "backend/yaha/modeling/templates.py",
                 },
             ]
         raise DomainError("小屋还不认识这个操作。", "METHOD_NOT_FOUND")

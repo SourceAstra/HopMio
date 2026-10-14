@@ -1,0 +1,10 @@
+schema_version: yaha.slicing/v1
+bambu_path: auto
+profiles_path: auto
+timeout_seconds: 600
+bed_type: Textured PEI Plate
+enable_support: true
+support_type: tree(auto)
+brim_width_mm: 4
+wall_loops: 3
+sparse_infill_density: 15%

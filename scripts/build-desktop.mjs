@@ -1,11 +1,10 @@
-import { build } from 'esbuild';
-await build({
-  entryPoints: ['desktop/main.ts', 'desktop/preload.ts'],
-  outdir: '.artifacts/desktop',
-  outExtension: { '.js': '.cjs' },
-  bundle: true,
-  platform: 'node',
-  format: 'cjs',
-  external: ['electron'],
-  target: 'node24',
-});
+import { cp, mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const output = path.join(root, '.artifacts', 'desktop');
+await mkdir(output, { recursive: true });
+for (const file of ['main.cjs', 'preload.cjs']) {
+  await cp(path.join(root, 'desktop', file), path.join(output, file));
+}

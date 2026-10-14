@@ -1,0 +1,21 @@
+# 呀哈造物独立模型注册表；修改后重启 Python 引擎。
+# model_url 是完整端点，协议可选 chat / messages。
+# 密钥只允许环境变量引用；也可留空并在家长设置中保存到系统凭据库。
+schema_version: yaha.models/v1
+default_model: glm-5.3-flash
+models:
+  - model_alias: glm-5.3-flash
+    model: glm-5.3-flash
+    protocol: messages
+    model_url: https://open.bigmodel.cn/api/anthropic/v1/messages
+    model_key: ${YAHA_AI_API_KEY}
+    supports_images: true
+    timeout_seconds: 600
+    max_tokens: 16384
+    reasoning_effort: medium
+  - model_alias: deepseek-chat
+    model: deepseek-chat
+    protocol: chat
+    model_url: https://api.deepseek.com/chat/completions
+    model_key: ${YAHA_DEEPSEEK_API_KEY}
+    supports_images: false

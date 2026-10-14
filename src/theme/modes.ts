@@ -1,4 +1,22 @@
 import type { Mode, Spec } from '../types';
+export function providerForMode(mode: Mode, current: string = 'parametric'): string {
+  if (isPhotoMode(mode)) return 'parametric';
+  if (mode === 'text') return current === 'reconstruction' ? 'parametric' : current;
+  return 'local';
+}
+export const isPhotoMode = (mode: Mode) => mode === 'image' || mode === 'multiview';
+export function editableSpec(spec: Spec): Spec {
+  if (spec.asset_ids.length > 0 && spec.mode === 'text') {
+    const mode: Mode = spec.asset_ids.length > 1 ? 'multiview' : 'image';
+    return {
+      ...spec,
+      mode,
+      provider: spec.provider === 'reconstruction' ? 'reconstruction' : 'parametric',
+      modeling_plan: null,
+    };
+  }
+  return spec;
+}
 export const modes: {
   id: Mode;
   name: string;
@@ -9,7 +27,7 @@ export const modes: {
   {
     id: 'text',
     name: '喊出一个想法',
-    description: '参数模板，或让 AI 创作自由形状',
+    description: '参数模板或 AI 设计，交给 Blender 造物',
     badge: '本地 / AI',
     emoji: '💬',
   },
@@ -30,35 +48,36 @@ export const modes: {
   {
     id: 'image',
     name: '照片变立体',
-    description: 'AI 猜想一张照片里物品的完整形状',
-    badge: '云端 AI',
+    description: '一张开始，补充照片继续细化造型',
+    badge: '参考造型',
     emoji: '🧸',
   },
   {
     id: 'multiview',
-    name: '绕一圈拍照',
-    description: '从 2–4 个角度认识同一个物品',
-    badge: '云端 AI',
+    name: '多角度参考',
+    description: '补充侧面、背面和细节，继续完善造型',
+    badge: '持续细化',
     emoji: '📸',
   },
   {
     id: 'import',
     name: '老作品焕新',
-    description: '导入 STL、GLB、3MF，调整大小和底座',
+    description: '导入 STL、GLB、3MF，保留原尺寸并修复',
     badge: '本地',
     emoji: '🛠️',
   },
 ];
 export const defaultSpec: Spec = {
-  schema_version: 1,
+  schema_version: 4,
   mode: 'text',
   prompt: '',
   template: 'usagi',
-  provider: 'local',
+  provider: 'parametric',
   height_mm: 80,
   width_mm: 48,
   depth_mm: 36,
   thickness_mm: 3,
+  bottom_mm: 4,
   ear_scale: 1.2,
   base: false,
   hole: false,

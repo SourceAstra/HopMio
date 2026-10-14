@@ -3,7 +3,7 @@ import { useStudio } from '../state/StudioContext';
 import { PageHeading } from '../components/PageHeading';
 import { ModelViewer } from '../components/ModelViewer';
 import { call } from '../api/client';
-import type { Project } from '../types';
+import type { Job } from '../types';
 export function Checkup() {
   const s = useStudio();
   const report = s.project?.validation;
@@ -54,8 +54,8 @@ export function Checkup() {
             disabled={s.busy || s.running || !s.project?.model}
             onClick={() =>
               void s.act(async () => {
-                s.adopt(await call<Project>('model.repair', { id: s.project!.id }));
-                s.setNotice('基础修复已保存新版本，请重新体检；复杂开口可能仍需外部工具。');
+                s.setJob(await call<Job>('model.repair', { id: s.project!.id }));
+                s.setNotice('Blender 正在修复，成功后保存新版本；复杂开口可能仍需手动处理。');
               })
             }
           >

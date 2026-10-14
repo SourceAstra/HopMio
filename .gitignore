@@ -3,6 +3,9 @@ node_modules/
 .artifacts/
 .yaha/
 .yaha-*/
+.state/
+.astramap/
+/bin/
 dist/
 desktop-dist/
 build/

@@ -7,6 +7,8 @@ import './styles/layout.css';
 import './styles/workbench.css';
 import './styles/pages.css';
 import './styles/usagi.css';
+import './styles/modeling.css';
+import './styles/reconstruction.css';
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <StudioProvider>
     <App />

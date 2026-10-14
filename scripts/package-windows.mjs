@@ -1,59 +1,38 @@
-// 发布流程单独维护；双击入口和命令行入口共用同一套打包步骤。
-import { spawn } from 'node:child_process';
-import fs from 'node:fs/promises';
+import { cp, mkdir, readdir, rm, access } from 'node:fs/promises';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { preparePackageEnvironment } from './package-environment.mjs';
 
-const root = fileURLToPath(new URL('../', import.meta.url));
-const directoryOnly = process.argv.includes('--dir');
-let packageEnvironment;
-const steps = [
-  ['准备乌萨奇应用图标', ['scripts/build-icons.mjs']],
-  ['检查代码', ['node_modules/typescript/bin/tsc', '--noEmit']],
-  ['构建网页', ['node_modules/vite/bin/vite.js', 'build']],
-  ['构建桌面程序', ['scripts/build-desktop.mjs']],
-  ['准备独立 Python 引擎', ['scripts/prepare-runtime.mjs']],
-  [
-    '生成 Windows 程序',
-    ['node_modules/electron-builder/cli.js', '--win', directoryOnly ? '--dir' : 'portable'],
-  ],
-];
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const artifacts = path.join(root, '.artifacts');
+const python = path.join(root, '.venv', 'Scripts', 'python.exe');
+const local = (file, args = []) => {
+  const result = spawnSync(process.execPath, [path.join(root, 'node_modules', file), ...args], { cwd: root, stdio: 'inherit' });
+  if (result.status !== 0) throw new Error(`命令失败：${file}`);
+};
+const run = (file, args = []) => {
+  const result = spawnSync(file, args, { cwd: root, stdio: 'inherit', windowsHide: true });
+  if (result.status !== 0) throw new Error(`命令失败：${file}`);
+};
 
-function run(args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, args, { cwd: root, env: packageEnvironment, stdio: 'inherit', windowsHide: true });
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`步骤失败（退出码 ${code ?? signal}），已停止后续打包。`));
-    });
-  });
+if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('请在 Windows x64 上运行此发布脚本。');
+for (const required of [python, path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe'), path.join(root, 'public', 'art', 'usagi', 'app-icon.ico')]) {
+  try { await access(required); } catch { throw new Error(`缺少发布依赖：${path.relative(root, required)}`); }
 }
-
-try {
-  if (process.platform !== 'win32') throw new Error('请在 Windows 电脑上运行此打包入口。');
-  await fs.access(path.join(root, '.venv/Scripts/python.exe'));
-  await fs.access(path.join(root, 'node_modules/electron/dist/electron.exe'));
-  console.log('呀哈造物 · 一键 Windows 打包');
-  packageEnvironment = await preparePackageEnvironment(root);
-  for (const [index, [label, args]] of steps.entries()) {
-    console.log(`\n[${index + 1}/${steps.length}] ${label}`);
-    await run(args);
-  }
-  const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
-  const result = directoryOnly
-    ? path.join(root, '.artifacts/windows/win-unpacked', `${pkg.build.productName}.exe`)
-    : path.join(root, 'release', `YaHa-Craft-${pkg.version}-Windows.exe`);
-  if (!directoryOnly) {
-    const generated = path.join(root, '.artifacts/windows', path.basename(result));
-    await fs.mkdir(path.dirname(result), { recursive: true });
-    await fs.copyFile(generated, result);
-  }
-  await fs.access(result);
-  console.log(`\n打包完成：${result}`);
-} catch (error) {
-  console.error('\n打包失败：', error.message);
-  console.error('请检查开发依赖，安装方式见 README.md。');
-  process.exitCode = 1;
+for (const directory of ['python', 'web', 'desktop', 'windows']) {
+  await rm(path.join(artifacts, directory), { recursive: true, force: true });
+  await mkdir(path.join(artifacts, directory), { recursive: true });
 }
+run(python, [path.join(root, 'scripts', 'prepare-runtime.py'), path.join(artifacts, 'python')]);
+local(path.join('vite', 'bin', 'vite.js'), ['build', '--outDir', path.join(artifacts, 'web')]);
+local(path.join('typescript', 'bin', 'tsc'), ['--noEmit']);
+run(process.execPath, [path.join(root, 'scripts', 'build-desktop.mjs')]);
+local(path.join('electron-builder', 'cli.js'), ['--win', 'portable', '--x64']);
+
+const output = path.join(artifacts, 'windows');
+const exe = (await readdir(output)).find((name) => name.endsWith('.exe'));
+if (!exe) throw new Error('electron-builder 未生成 Windows EXE。');
+const release = path.join(root, 'release');
+await mkdir(release, { recursive: true });
+await cp(path.join(output, exe), path.join(release, exe));
+console.log(`Windows 发布包：${path.join('release', exe)}`);

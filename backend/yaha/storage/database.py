@@ -57,5 +57,11 @@ class Database:
             rows = self.connection.execute(f"SELECT data FROM {table}").fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    def delete(self, table: str, identifier: str):
+        assert table in {"projects", "revisions", "assets", "jobs", "settings"}
+        key = "key" if table == "settings" else "id"
+        with self.transaction() as conn:
+            conn.execute(f"DELETE FROM {table} WHERE {key}=?", (identifier,))
+
     def close(self):
         self.connection.close()

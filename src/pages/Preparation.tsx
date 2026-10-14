@@ -10,7 +10,7 @@ export function Preparation() {
     <>
       <PageHeading
         title="打印准备台"
-        description="作品打包好，和家长一起在 Bambu Studio 检查切片。"
+        description="选择实际喷嘴与材料，生成本地切片，再和家长检查打印预览。"
       />
       <div className="two-columns">
         <section className="panel form-panel">
@@ -22,7 +22,7 @@ export function Preparation() {
             </select>
           </label>
           <p className="soft-notice">
-            单色版 · 180 × 180 × 180 mm。当前设备配置只验证 A1 mini 的尺寸。
+            A1 mini · 180 × 180 × 180 mm。切片使用随 Bambu Studio 发布的官方机型参数。
           </p>
           <div className="form-grid">
             <label>
@@ -70,14 +70,14 @@ export function Preparation() {
           </div>
           <button
             className="secondary"
-            disabled={s.busy}
+            disabled={s.busy || s.running}
             onClick={() =>
               void s.act(async () => {
                 s.setProfile(await call<Profile>('profile.save', { profile: s.profile }));
                 const list = await s.refresh();
                 const current = list.find((p) => p.id === s.project?.id);
                 if (current) s.adopt(current);
-                s.setNotice('打印配置已保存。变化后的旧体检已失效，请重新检查。');
+                s.setNotice('打印配置已保存。参数改变后，旧体检和切片失效，请重新检查。');
               })
             }
           >
@@ -89,7 +89,7 @@ export function Preparation() {
           <p>STL 是单色打印网格；3MF 保留毫米单位；GLB 用于预览；.usagi 保存模型、想法和材料。</p>
           <ExportButtons />
           <div className="soft-notice">
-            这里导出的是模型文件，尚未切片。真实耗时、耗材和支撑由 Bambu Studio 的切片结果确定。
+            普通 3MF 保存模型；“已切片打印文件”另含实际打印路径。真实耗时与耗材来自本次切片报告。
           </div>
           <button className="link" onClick={() => s.setRoom('print')}>
             去打印站查看家庭操作清单 →

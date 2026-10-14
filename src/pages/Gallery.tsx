@@ -1,19 +1,20 @@
-import { useState } from 'react';
 import { PageHeading } from '../components/PageHeading';
 import { Usagi } from '../components/Usagi';
 import { ModelViewer } from '../components/ModelViewer';
 import { useStudio } from '../state/StudioContext';
-import { call } from '../api/client';
-import type { Project } from '../types';
 export function Gallery() {
   const s = useStudio();
-  const [story, setStory] = useState('');
   const shown = s.projects.filter((p) => p.exhibited);
   return (
-    <>
+    <div className="gallery-page">
       <PageHeading
         title="乌萨奇展厅"
-        description="给你的作品一个位置，也给你的尝试写一句故事。展厅只保存在本机。"
+        description="这里展示从作品柜中选出的作品。展厅只保存在本机。"
+        actions={
+          <button className="primary" onClick={() => s.setRoom('library')}>
+            从作品柜选作品
+          </button>
+        }
       />
       <div className="gallery-banner">
         <Usagi size={130} />
@@ -23,59 +24,16 @@ export function Gallery() {
         </div>
         <span className="gallery-star">✦</span>
       </div>
-      {s.project && (
-        <section className="panel form-panel">
-          <h2>展出「{s.project.name}」</h2>
-          <textarea
-            aria-label="作品故事"
-            rows={3}
-            placeholder="我做了什么？哪一步最有趣？爸爸妈妈和我分别做了什么？"
-            value={story}
-            onChange={(e) => setStory(e.target.value)}
-          />
-          <div className="button-row">
-            <button
-              className="primary"
-              disabled={!s.project.model || s.busy}
-              onClick={() =>
-                void s.act(async () => {
-                  s.adopt(
-                    await call<Project>('project.update', {
-                      id: s.project!.id,
-                      story: story || s.project!.story,
-                      exhibited: true,
-                    }),
-                  );
-                  s.setNotice('作品已经摆进本机展厅！');
-                })
-              }
-            >
-              摆进我的展厅 ✦
-            </button>
-            {s.project.exhibited && (
-              <button
-                className="secondary"
-                onClick={() =>
-                  void s.act(async () =>
-                    s.adopt(
-                      await call<Project>('project.update', {
-                        id: s.project!.id,
-                        exhibited: false,
-                      }),
-                    ),
-                  )
-                }
-              >
-                收回作品柜
-              </button>
-            )}
-          </div>
-        </section>
-      )}
       <div className="gallery-grid">
         {shown.map((p) => (
           <article className="gallery-card" key={p.id}>
-            <ModelViewer assetId={p.model?.glb_id} compact />
+            {p.model?.glb_id ? (
+              <ModelViewer assetId={p.model.glb_id} compact />
+            ) : (
+              <div className="viewer compact">
+                <div className="viewer-empty">把想法告诉乌萨奇，模型会出现在这里 ✨</div>
+              </div>
+            )}
             <div>
               <span className="pill">我的小屋收藏</span>
               <h2>{p.name}</h2>
@@ -93,7 +51,7 @@ export function Gallery() {
           </article>
         ))}
       </div>
-      {!shown.length && <p className="empty-state">展台留好了，等你的作品来住。</p>}
-    </>
+      {!shown.length && <p className="empty-state">展厅还没有作品。去作品柜选择已生成的作品，点击“放入展厅”。</p>}
+    </div>
   );
 }

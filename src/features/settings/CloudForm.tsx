@@ -5,7 +5,6 @@ import type { Preferences } from '../../types';
 export function CloudForm({ token }: { token: string }) {
   const s = useStudio();
   const [values, setValues] = useState(s.preferences!);
-  const [meshyKey, setMeshyKey] = useState('');
   const [chatKey, setChatKey] = useState('');
   return (
     <section className="panel form-panel">
@@ -28,30 +27,34 @@ export function CloudForm({ token }: { token: string }) {
           onChange={(e) => setValues({ ...values, daily_limit: Number(e.target.value) })}
         />
       </label>
-      <h3>Meshy · 概念图与三维造物</h3>
+      <h3>AI 理解与参数建模</h3>
+      {values.chat_registry_configured && (
+        <small>
+          模型由本项目 config/models.yaml 配置。密钥可在这里保存，也可由家长通过环境变量提供。
+        </small>
+      )}
       <label>
-        API 密钥 {s.preferences?.meshy_configured ? '（已配置，留空保留）' : ''}
-        <input
-          aria-label="Meshy密钥"
-          type="password"
-          autoComplete="off"
-          value={meshyKey}
-          onChange={(e) => setMeshyKey(e.target.value)}
-        />
+        接口协议
+        <select
+          value={values.chat_protocol || 'chat'}
+          disabled={values.chat_registry_configured}
+          onChange={(e) =>
+            setValues({
+              ...values,
+              chat_protocol: e.target.value as 'chat' | 'messages',
+            })
+          }
+        >
+          <option value="chat">Chat Completions</option>
+          <option value="messages">Messages（智谱 / Claude 兼容）</option>
+        </select>
       </label>
       <label>
-        模型标识
-        <input
-          value={values.meshy_model}
-          onChange={(e) => setValues({ ...values, meshy_model: e.target.value })}
-        />
-      </label>
-      <h3>多模态理解 · 兼容 Chat Completions</h3>
-      <label>
-        HTTPS API 根地址（例如 /v1）
+        HTTPS API 地址（支持完整端点）
         <input
           placeholder="https://服务商地址/v1"
           value={values.chat_url}
+          disabled={values.chat_registry_configured}
           onChange={(e) => setValues({ ...values, chat_url: e.target.value })}
         />
       </label>
@@ -59,6 +62,7 @@ export function CloudForm({ token }: { token: string }) {
         模型名称
         <input
           value={values.chat_model}
+          disabled={values.chat_registry_configured}
           onChange={(e) => setValues({ ...values, chat_model: e.target.value })}
         />
       </label>
@@ -78,11 +82,10 @@ export function CloudForm({ token }: { token: string }) {
           void s.act(async () => {
             const prefs = await call<Preferences>('settings.update', {
               token,
-              values: { ...values, meshy_key: meshyKey, chat_key: chatKey },
+              values: { ...values, chat_key: chatKey },
             });
             s.setPreferences(prefs);
             setValues(prefs);
-            setMeshyKey('');
             setChatKey('');
             s.setNotice('配置已保存，密钥保存在系统凭据库。');
           })

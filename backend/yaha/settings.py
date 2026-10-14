@@ -5,15 +5,17 @@ import hmac
 import os
 import secrets
 import time
+from urllib.parse import urlsplit
 import keyring
 from .contracts import DomainError
+from .ai.model_registry import load_model
 
 DEFAULTS = {
     "cloud_enabled": False,
     "daily_limit": 5,
-    "meshy_model": "meshy-7.1",
     "chat_url": "",
     "chat_model": "",
+    "chat_protocol": "chat",
     "theme": "sunshine",
 }
 
@@ -22,24 +24,37 @@ class Settings:
     def __init__(self, db):
         self.db = db
         self.tokens = {}
+        self.imported_model = load_model()
 
     def values(self):
-        return DEFAULTS | (self.db.get("settings", "preferences") or {})
+        saved = self.db.get("settings", "preferences") or {}
+        values = DEFAULTS | {key: saved[key] for key in DEFAULTS if key in saved}
+        if self.imported_model:
+            values.update(
+                {name: self.imported_model[name] for name in ("chat_url", "chat_model", "chat_protocol")}
+            )
+        return values
 
     def key(self, provider):
+        if provider != "chat":
+            raise DomainError("不支持这个 AI 密钥类型。", "AI_CONFIG")
+        if provider == "chat" and self.imported_model and self.imported_model["key"]:
+            return self.imported_model["key"]
         try:
-            value = keyring.get_password("YaHaCraft", provider)
+            account = "chat:" + self.imported_model["account"] if self.imported_model else "chat"
+            value = keyring.get_password("YaHaCraft", account)
+            if not value and self.imported_model and urlsplit(self.imported_model["chat_url"]).hostname == "open.bigmodel.cn":
+                value = keyring.get_password("YaHaCraft", "chat")
         except Exception:
             value = None
-        return value or os.environ.get(
-            {"meshy": "MESHY_API_KEY", "chat": "YAHA_AI_API_KEY"}[provider], ""
-        )
+        return value or ("" if self.imported_model else os.environ.get("YAHA_AI_API_KEY", ""))
 
     def public(self):
         return self.values() | {
             "pin_set": bool(self.db.get("settings", "guardian")),
-            "meshy_configured": bool(self.key("meshy")),
             "chat_configured": bool(self.key("chat")),
+            "chat_registry_configured": bool(self.imported_model),
+            "chat_supports_images": bool(self.imported_model and self.imported_model["supports_images"]),
         }
 
     def unlock(self, pin):
@@ -84,11 +99,13 @@ class Settings:
             raise DomainError("每日云端任务上限应为 1 至 50。")
         if prefs["chat_url"] and not prefs["chat_url"].startswith("https://"):
             raise DomainError("AI 服务地址必须使用 HTTPS。")
-        for provider in ("meshy", "chat"):
+        if prefs["chat_protocol"] not in ("chat", "messages"):
+            raise DomainError("请选择 Chat Completions 或 Messages 协议。")
+        for provider in ("chat",):
             if values.get(provider + "_key"):
                 try:
                     keyring.set_password(
-                        "YaHaCraft", provider, values[provider + "_key"]
+                        "YaHaCraft", "chat:" + self.imported_model["account"] if self.imported_model else provider, values[provider + "_key"]
                     )
                 except Exception:
                     raise DomainError(

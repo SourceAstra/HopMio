@@ -7,6 +7,7 @@ import os
 import uuid
 from pathlib import Path
 from ..contracts import DomainError
+from ..package_contract import MAX_PACKAGE_BYTES
 
 MAX_ASSET_BYTES = 40 * 1024 * 1024
 
@@ -17,9 +18,10 @@ class Assets:
         self.root = db.root / "assets"
         self.root.mkdir(exist_ok=True)
 
-    def write(self, content: bytes, extension: str, name: str, kind: str = "model"):
-        if len(content) > MAX_ASSET_BYTES:
-            raise DomainError("文件超过 40 MB，请先减少图片尺寸或模型面数。")
+    def write(self, content: bytes, extension: str, name: str, kind: str = "model", *, units=None):
+        limit = MAX_PACKAGE_BYTES if extension == ".usagi" else MAX_ASSET_BYTES
+        if len(content) > limit:
+            raise DomainError(f"文件超过 {limit // 1024 // 1024} MB，请先减少图片尺寸或模型面数。")
         if extension not in {
             ".png",
             ".jpg",
@@ -29,33 +31,48 @@ class Assets:
             ".stl",
             ".3mf",
             ".usagi",
+            ".blend",
+            ".json",
         }:
             raise DomainError("这个文件类型还不能放进小屋。")
         identifier = str(uuid.uuid4())
         file = self.root / (identifier + extension)
         temp = file.with_suffix(extension + ".partial")
-        with temp.open("wb") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temp.replace(file)
-        asset = {
-            "id": identifier,
-            "extension": extension,
-            "name": Path(name).name,
-            "kind": kind,
-            "bytes": len(content),
-            "sha256": hashlib.sha256(content).hexdigest(),
-            "mime": {
-                ".glb": "model/gltf-binary",
-                ".stl": "application/octet-stream",
-                ".3mf": "model/3mf",
-            }.get(
-                extension, mimetypes.guess_type(file)[0] or "application/octet-stream"
-            ),
-        }
-        self.db.put("assets", identifier, asset)
+        try:
+            with temp.open("wb") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            temp.replace(file)
+            asset = {
+                "id": identifier,
+                "extension": extension,
+                "name": Path(name).name,
+                "kind": kind,
+                "bytes": len(content),
+                "sha256": hashlib.sha256(content).hexdigest(),
+                "mime": {
+                    ".glb": "model/gltf-binary",
+                    ".stl": "application/octet-stream",
+                    ".3mf": "model/3mf",
+                }.get(
+                    extension, mimetypes.guess_type(file)[0] or "application/octet-stream"
+                ),
+            }
+            if units is not None:
+                asset["units"] = units
+            self.db.put("assets", identifier, asset)
+        except Exception:
+            temp.unlink(missing_ok=True)
+            file.unlink(missing_ok=True)
+            raise
         return asset
+
+    def remove(self, identifier):
+        file = self.path(identifier)
+        file.unlink(missing_ok=True)
+        with self.db.transaction() as connection:
+            connection.execute("DELETE FROM assets WHERE id=?", (identifier,))
 
     def path(self, identifier: str):
         try:
@@ -77,9 +94,11 @@ class Assets:
             content = base64.b64decode(encoded, validate=True)
         except ValueError:
             raise DomainError("文件内容不完整，请重新上传。")
+        if len(content) > 12 * 1024 * 1024:
+            raise DomainError("上传文件超过 12 MB，请先压缩。")
         extension = Path(name).suffix.lower()
         if extension in {".png", ".jpg", ".jpeg", ".webp"}:
-            from PIL import Image
+            from PIL import Image, ImageOps
             import io
 
             try:
@@ -87,10 +106,16 @@ class Assets:
                 if image.width * image.height > 20_000_000:
                     raise DomainError("图片太大，请缩小到 2000 万像素以内。")
                 image.load()
-                image.thumbnail((1600, 1600))
+                image = ImageOps.exif_transpose(image)
+                image.thumbnail((4096, 4096))
                 output = io.BytesIO()
-                image.convert("RGBA").save(output, format="PNG")
-                return self.write(output.getvalue(), ".png", name, "image")
+                if "A" in image.getbands() and image.getchannel("A").getextrema()[0] < 255:
+                    image.convert("RGBA").save(output, format="PNG")
+                    extension = ".png"
+                else:
+                    image.convert("RGB").save(output, format="JPEG", quality=95, subsampling=0)
+                    extension = ".jpg"
+                return self.write(output.getvalue(), extension, name, "image")
             except DomainError:
                 raise
             except Exception:

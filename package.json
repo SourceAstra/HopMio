@@ -5,17 +5,13 @@
   "type": "module",
   "author": "YaHa Craft Family",
   "description": "呀哈造物 · 乌萨奇小屋造物之旅",
-  "main": ".artifacts/desktop/main.cjs",
   "scripts": {
-    "dev": "node scripts/dev.mjs",
-    "dev:web": "node scripts/dev-web.mjs --open",
     "desktop:build": "node scripts/build-desktop.mjs",
-    "build": "tsc --noEmit && vite build && node scripts/build-desktop.mjs",
-    "test:engine": "node scripts/test-engine.mjs",
-    "test:ui": "playwright test",
-    "runtime:prepare": "node scripts/prepare-runtime.mjs",
-    "package": "node scripts/package-windows.mjs",
-    "package:dir": "node scripts/package-windows.mjs --dir"
+    "package": "pnpm package:windows",
+    "package:windows": "node scripts/package-windows.mjs",
+    "build": "tsc --noEmit && vite build",
+    "build:web": "vite build",
+    "preview": "vite preview"
   },
   "build": {
     "extraMetadata": {
@@ -46,8 +42,8 @@
     ],
     "extraResources": [
       {
-        "from": "backend/yaha",
-        "to": "backend/yaha",
+        "from": "backend",
+        "to": "backend",
         "filter": [
           "**/*",
           "!**/__pycache__/**"
@@ -56,6 +52,10 @@
       {
         "from": ".artifacts/python",
         "to": "python"
+      },
+      {
+        "from": "config",
+        "to": "config"
       }
     ],
     "win": {

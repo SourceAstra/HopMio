@@ -22,37 +22,52 @@ export function Settings() {
         {token ? <CloudForm token={token} /> : <GuardianForm onUnlock={setToken} />}
         <section className="panel form-panel">
           <h2>小屋现在有什么能力</h2>
-          <p>🧩 本地模板、轮廓与浮雕：可直接使用</p>
           <p>
-            ✨ Meshy：
-            {s.preferences?.meshy_configured ? '已配置密钥，等待实际调用' : '尚未配置密钥'}
+            🧩 本地建模：
+            {s.preferences?.blender?.available
+              ? s.preferences.blender.version
+              : s.preferences?.blender?.message || '读取中'}
           </p>
+          {!s.preferences?.blender?.available && (
+            <p className="soft-notice">
+              Windows 运行“安装Blender.cmd”；Linux 运行 ./install-blender.sh，安装后重启小屋。
+            </p>
+          )}
           <p>
-            💬 AI 理解：
-            {s.preferences?.chat_configured ? '已配置密钥，需服务支持图片和 JSON' : '尚未配置密钥'}
+            💬 AI 理解与参数建模：
+            {s.preferences?.chat_configured
+              ? s.preferences.chat_supports_images
+                ? '已配置密钥，可提交文字与照片方案'
+                : '已配置密钥，仅提交文字方案'
+              : '尚未配置密钥'}
           </p>
-          <p>🖨️ 打印机：Bambu Studio 交接，教学模拟</p>
+          <p>表面重建：{s.preferences?.reconstruction?.message || '读取中'}</p>
+          <p>A1 mini 切片：{s.preferences?.slicer?.message || '读取中'}</p>
+          <p className="soft-notice">
+            安装完整工具：Windows 运行“安装建模工具.cmd”；Linux 运行
+            ./install-modeling.sh。原始扫描、制造网格与切片文件分别保存。
+          </p>
           <h3>最近造物任务</h3>
           {jobs.slice(0, 8).map((j) => (
             <div className="task-row" key={j.id}>
               <strong>
-                {j.kind === 'concept' ? '概念图' : '模型造物'} · {j.status}
+                {j.kind === 'plan'
+                  ? '建模方案'
+                  : j.kind === 'adjust'
+                    ? 'AI 细节调整'
+                    : j.kind === 'repair'
+                      ? '网格修复'
+                      : j.kind === 'slice'
+                        ? '实际切片'
+                        : '模型造物'}{' '}
+                · {j.status}
               </strong>
               <p>{j.message}</p>
-              {j.remote_id && <code>云端编号：{j.remote_id}</code>}
-              {j.remote_id && ['failed', 'interrupted', 'canceled'].includes(j.status) && (
-                <button
-                  className="secondary"
-                  disabled={s.busy || s.running}
-                  onClick={() =>
-                    void s.act(async () => {
-                      s.setJob(await call<Job>('job.resume', { id: j.id }));
-                      s.setNotice('继续查询原云端任务，没有重新提交生成请求。');
-                    })
-                  }
-                >
-                  继续查看原任务
-                </button>
+              {j.diagnostics && (
+                <details>
+                  <summary>查看建模记录</summary>
+                  <pre className="modeling-log">{j.diagnostics.log}</pre>
+                </details>
               )}
             </div>
           ))}
