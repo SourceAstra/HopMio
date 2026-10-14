@@ -92,6 +92,44 @@ class Projects:
             reverse=True,
         )
 
+    def delete(self, identifier: str):
+        self.get(identifier)
+        with self.db.transaction() as conn:
+            conn.execute("DELETE FROM revisions WHERE project_id=?", (identifier,))
+            conn.execute("DELETE FROM projects WHERE id=?", (identifier,))
+        return {"id": identifier, "deleted": True}
+
+    def delete_revision(self, identifier: str, revision_id: str):
+        project = self.get(identifier)
+        rev = self.db.get("revisions", revision_id)
+        if not rev or rev.get("project_id") != identifier:
+            raise DomainError("这个版本不存在或不属于当前作品。")
+        all_revs = [r for r in self.history(identifier) if r["id"] != revision_id]
+        with self.db.transaction() as conn:
+            conn.execute(
+                "DELETE FROM revisions WHERE id=? AND project_id=?",
+                (revision_id, identifier),
+            )
+            if project.get("revision_id") == revision_id:
+                if all_revs:
+                    latest = all_revs[0]
+                    project["revision_id"] = latest["id"]
+                    project["spec"] = latest["spec"]
+                    project["model"] = latest["model"]
+                else:
+                    project["revision_id"] = None
+                    project["model"] = None
+            project["revision_count"] = len(all_revs)
+            project["updated_at"] = now()
+            project["validation"] = None
+            project["printed"] = False
+            project["slicing"] = None
+            conn.execute(
+                "UPDATE projects SET data=? WHERE id=?",
+                (json.dumps(project, ensure_ascii=False), identifier),
+            )
+        return self.get(identifier)
+
     def update(self, identifier, **changes):
         project = self.get(identifier)
         project.update(changes, updated_at=now())

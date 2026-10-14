@@ -178,6 +178,36 @@ function useStudioState() {
         setNotice(changes.exhibited ? '作品已放入乌萨奇展厅。' : '作品已收回作品柜。');
       return updated;
     });
+  const deleteProject = async (id: string) =>
+    act(async () => {
+      await call('project.delete', { id });
+      setProjects((old) => {
+        const remaining = old.filter((p) => p.id !== id);
+        if (currentId.current === id) {
+          if (remaining.length > 0) {
+            adopt(remaining[0]);
+          } else {
+            currentId.current = null;
+            currentRevision.current = null;
+            setProject(null);
+            setSpec(defaultSpec);
+          }
+        }
+        return remaining;
+      });
+      setNotice('作品已从作品柜中删除。');
+    });
+  const deleteRevision = async (projectId: string, revisionId: string) =>
+    act(async () => {
+      const updated = await call<Project>('project.delete_revision', {
+        project_id: projectId,
+        revision_id: revisionId,
+      });
+      adopt(updated);
+      await refresh();
+      setNotice('指定版本已删除。');
+      return updated;
+    });
   const generate = async (adjustment?: ModelAdjustment, requestSpec = spec) =>
     act(async () => {
       if (!project) return;
@@ -284,6 +314,8 @@ function useStudioState() {
     act,
     create,
     updateProject,
+    deleteProject,
+    deleteRevision,
     generate,
     organizeIdea,
     design,

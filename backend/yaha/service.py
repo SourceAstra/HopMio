@@ -97,6 +97,14 @@ class Service:
             if "exhibited" in p:
                 changes["exhibited"] = bool(p["exhibited"])
             return self.projects.update(p["id"], **changes)
+        if method == "project.delete":
+            with self.lock:
+                return self.projects.delete(p["id"])
+        if method in ("project.delete_revision", "revision.delete"):
+            with self.lock:
+                return self.projects.delete_revision(
+                    p.get("project_id") or p.get("id"), p["revision_id"]
+                )
         if method == "asset.upload":
             return self.assets.upload(p["name"], p["base64"])
         if method == "asset.list":
