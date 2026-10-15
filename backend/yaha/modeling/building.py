@@ -24,7 +24,7 @@ def build_with_correction(service, spec, job, **options):
     try:
         return build_model(service, spec, job, **options)
     except DomainError as error:
-        if spec.provider != "parametric" or spec.mode != Mode.TEXT or options.get("repair") or options.get("review_views") or error.code not in ("BLENDER_GEOMETRY", "BLENDER_DIMENSION"):
+        if spec.provider != "parametric" or spec.mode != Mode.TEXT or options.get("repair") or options.get("adjustment_intent") or error.code not in ("BLENDER_GEOMETRY", "BLENDER_DIMENSION", "BLENDER_EXECUTION"):
             raise
         from .planner import design_plan
         correction = {"error": str(error), "plan": json.dumps(spec.modeling_plan.model_dump(), ensure_ascii=False)}
@@ -35,8 +35,8 @@ def build_with_correction(service, spec, job, **options):
         return build_model(service, spec, job, **options)
 
 
-def build_model(service, spec, job, *, repair=False, progress_range=None, review_views=False, fit_photos=True, deadline=None):
-    request, inputs, plan = prepare(spec, service.assets, repair, job=job, observer=service.photo_observer)
+def build_model(service, spec, job, *, repair=False, progress_range=None, review_views=False, fit_photos=True, deadline=None, adjustment_intent=None):
+    request, inputs, plan = prepare(spec, service.assets, repair, job=job, observer=service.photo_observer, adjustment_intent=adjustment_intent)
     if plan:
         request["source_plan"] = plan.model_dump()
     if progress_range:

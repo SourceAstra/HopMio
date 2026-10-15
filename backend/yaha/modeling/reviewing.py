@@ -96,7 +96,7 @@ def refine_shape(service, spec, result, job, *, adjustment=None):
                 if compile_plan(candidate.modeling_plan) == compile_plan(spec.modeling_plan):
                     review["message"] = "外观未通过且 AI 未提出有效修订，保留待改进草稿。"
                     break
-                improved = build_model(service, candidate, job, progress_range=(65, 90), review_views=True, fit_photos=not intentional, deadline=deadline)
+                improved = build_model(service, candidate, job, progress_range=(65, 90), review_views=True, fit_photos=not intentional, deadline=deadline, adjustment_intent=intent)
                 # 候选只有制造复测通过才替换当前草稿；下一轮审阅该实际产物。
                 spec, result = candidate, improved
                 job.record(prepared_spec=spec.model_dump())

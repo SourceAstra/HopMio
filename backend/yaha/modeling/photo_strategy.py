@@ -1,20 +1,21 @@
 """照片生成按观测能力选策略，不按对象类别选生成器。"""
 
 from ..contracts import DomainError, Mode
-from .planner import current_plan
 
 PHOTO_MODES = (Mode.IMAGE, Mode.MULTIVIEW)
-RECOVERABLE = {"RECONSTRUCTION_FAILED", "RECONSTRUCTION_SURFACE", "RECONSTRUCTION_OUTPUT", "BLENDER_GEOMETRY", "BLENDER_DIMENSION"}
 
 
 def select_photo_route(service, spec, automatic):
     if not automatic or spec.mode not in PHOTO_MODES:
         return None
     scan = service.modelers["reconstruction"].status()
-    keep_plan = current_plan(spec)
     requested = spec.provider
-    preferred = {"parameters": "parametric", "surface": "reconstruction"}.get(spec.photo_policy)
-    spec.provider = preferred or ("parametric" if keep_plan or not scan["available"] or len(spec.asset_ids) < scan["min_photos"] else "reconstruction")
+    spec.provider = "parametric" if spec.photo_policy == "parameters" else "reconstruction"
+    if spec.provider == "reconstruction":
+        if not scan["available"]:
+            raise DomainError(scan["message"], "RECONSTRUCTION_UNAVAILABLE")
+        if not scan["min_photos"] <= len(spec.asset_ids) <= scan["max_photos"]:
+            raise DomainError(f"实物表面重建需要{scan['min_photos']}–{scan['max_photos']}张同一实物的重叠视角照片；单张照片不能确定深度与背面。请补充多视角照片，或主动选择包含推测的照片参考设计。", "RECONSTRUCTION_VIEWS")
     return {"schema_version": "yaha.photo-generation/v1", "policy": spec.photo_policy, "requested_provider": requested, "selected_provider": spec.provider, "attempts": []}
 
 
@@ -22,14 +23,10 @@ def build_photo_result(spec, route, job, operation):
     try:
         result = operation(spec)
     except DomainError as error:
-        if not route or route["policy"] != "auto" or spec.provider != "reconstruction" or error.code not in RECOVERABLE:
-            raise
-        route["attempts"].append({"provider": "reconstruction", "status": "failed", "code": error.code, "message": str(error)[:300]})
-        job.record(photo_generation=route)
-        job.check()
-        job.progress(2, "观测不足以完成表面恢复，生成明确标注的轮廓草稿")
-        fallback = spec.model_copy(deep=True, update={"provider": "parametric"})
-        result = operation(fallback)
+        if route:
+            route["attempts"].append({"provider": spec.provider, "status": "failed", "code": error.code, "message": str(error)[:300]})
+            job.record(photo_generation=route)
+        raise
     resolved, (built, _, _) = result
     if route:
         route["selected_provider"] = resolved.provider

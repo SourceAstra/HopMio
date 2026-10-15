@@ -1,6 +1,7 @@
 import { House, Plus, Settings, Sparkles } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
 import { Usagi } from './Usagi';
+import { isModelDraft } from '../features/modeling/quality';
 
 export function Topbar() {
   const s = useStudio();
@@ -26,7 +27,7 @@ export function Topbar() {
           <div className="topbar-project-indicator" onClick={() => s.setRoom('desk')} title="当前造物项目">
             <span className="indicator-project-name">{s.project.name}</span>
             <span className={`indicator-status-pill ${s.dirty ? 'dirty' : 'clean'}`}>
-              {s.dirty ? '● 待应用新版' : '✓ 已就绪'}
+              {s.dirty ? '● 待应用新版' : isModelDraft(s.project.model) ? '● 待改进草稿' : s.project.model ? '✓ 已生成' : '等待造物'}
             </span>
           </div>
         )}

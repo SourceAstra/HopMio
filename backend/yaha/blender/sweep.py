@@ -28,8 +28,10 @@ def sweep(step):
         tangents = [(rings[1][0] - first[0]).normalized(), (last[0] - rings[-2][0]).normalized()]
         lengths = [sum(ring[1:3]) / 4 for ring in (first, last)]
         start, end = [], []
-        for sample in range(1, 8):
-            angle = sample * math.pi / 16
+        radius = max(first[1:3] + last[1:3]) / 2
+        count = max(8, math.ceil(math.pi / (4 * math.acos(1 - min(0.02 / radius, 1)))))
+        for sample in range(1, count):
+            angle = sample * math.pi / (2 * count)
             start.append((first[0] - tangents[0] * lengths[0] * math.cos(angle), first[1] * math.sin(angle), first[2] * math.sin(angle), first[3]))
             end.append((last[0] + tangents[1] * lengths[1] * math.sin(angle), last[1] * math.cos(angle), last[2] * math.cos(angle), last[3]))
         poles = [first[0] - tangents[0] * lengths[0], last[0] + tangents[1] * lengths[1]]

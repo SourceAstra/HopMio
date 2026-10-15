@@ -106,7 +106,7 @@ def export_scene(obj, directory, max_faces, features, clean_flat=False, voxel_mm
     if preview_views:
         from shape_views import render_views
         try:
-            # 三视图与 STL 使用同一最终网格，包含制造清理后的结果。
+            # 审阅视图与 STL 使用同一最终网格，包含制造清理后的结果。
             render_views(result, directory, progress)
         except Exception as error:
             (directory / "comparison.png").unlink(missing_ok=True)

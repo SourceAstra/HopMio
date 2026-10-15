@@ -8,6 +8,7 @@ from .modeling.planner import current_plan, design_plan
 from .modeling.reviewing import refine_shape
 from .modeling.photo_strategy import select_photo_route, build_photo_result
 from .modeling.photo_quality import photo_completion
+from .modeling.design_review import review_design
 
 
 def start_generation(service, identifier, data, repair=False, *, adjustment=None, auto_photo=False):
@@ -22,6 +23,8 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
         raise DomainError("先生成参考造型，再用 AI 调整细节。", "AI_ADJUSTMENT_REQUIRES_PLAN")
     if adjustment and not service.editor:
         raise DomainError("当前建模服务未提供 AI 细节调整。", "AI_ADJUSTMENT_UNAVAILABLE")
+    if adjustment and not service.settings.public()["chat_supports_images"]:
+        raise DomainError("AI 微调需要对照修改前后的实际模型，请选择支持图片输入的模型。", "AI_CAPABILITY")
     if repair:
         if not project["model"]:
             raise DomainError("还没有模型可以修复。")
@@ -35,15 +38,19 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
         if source.provider == "parametric" and source.mode in (Mode.TEXT, Mode.IMAGE, Mode.MULTIVIEW):
             if photo_shape and not source.asset_ids:
                 raise DomainError("先上传一张参考照片。", "PHOTO_REQUIRED")
-            if not current_plan(source):
+            if not current_plan(source) or (not adjustment_result and source.modeling_plan.schema_version < 5):
                 design_plan(service, source, job)
         # 优化 B（微调路径纯粹化）：明确区分“照片一键建模全景审阅”与“用户意图局部微调”。
         # 用户微调已有明确主观修改意图，直通物理制造定标，避免拉入全量原图进行严苛比对与长达数分钟的重构循环。
         review = photo_shape and not repair and not adjustment_result
         result_spec = source
-        result = build_with_correction(service, source, job, repair=repair, progress_range=(10, 55) if review else None, review_views=bool(review or adjustment_result), fit_photos=not adjustment_result)
+        result = build_with_correction(service, source, job, repair=repair, progress_range=(10, 55) if review else None, review_views=bool(review or adjustment_result or source.provider == "parametric"), fit_photos=not adjustment_result, adjustment_intent=(adjustment_result or {}).get("instruction"))
         if review:
             result_spec, result = refine_shape(service, source, result, job, adjustment=adjustment_result)
+        elif source.provider == "parametric" and not repair:
+            result_spec, result = review_design(service, source, result, project, job, adjustment=adjustment_result)
+            if adjustment_result and result[0].manifest["design_review"]["status"] != "accepted":
+                raise DomainError("微调成品未通过需求与保留区域审阅，原模型未被覆盖。" + result[0].manifest["design_review"]["message"], "AI_ADJUSTMENT_REVIEW")
         return result_spec, result
 
     def work(job):
@@ -53,7 +60,7 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
         built, mesh, measurements = result
         if adjustment_result:
             built.manifest["adjustment"] = adjustment_result
-        review = built.manifest.get("photo_review")
+        review = built.manifest.get("design_review") or built.manifest.get("photo_review")
         completion = photo_completion(review)
         draft = completion["status"] == "draft"
         job.progress(92, "保存待改进草稿与审阅依据" if draft else "保存已复测的模型与源工程")
@@ -84,6 +91,8 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
                     model["reconstruction"] = built.manifest["reconstruction"]
                 if built.manifest.get("photo_review"):
                     model["photo_review"] = built.manifest["photo_review"]
+                if built.manifest.get("design_review"):
+                    model["design_review"] = built.manifest["design_review"]
                 if built.manifest.get("outline_fit"):
                     model["outline_fit"] = built.manifest["outline_fit"]
                 if built.manifest.get("photo_fidelity"):

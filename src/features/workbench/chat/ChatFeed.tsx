@@ -28,7 +28,8 @@ export function ChatFeed({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const feed = bottomRef.current?.parentElement;
+    feed?.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
   }, [messages, isBusy]);
 
   return (
@@ -64,7 +65,7 @@ export function ChatFeed({
                           onSelectQuickPrompt('乌萨奇元气桌面立牌，高 80mm 自带稳固底座')
                         }
                       >
-                        🐰 80mm 元气立牌
+                        ✦ 80mm 元气立牌
                       </button>
                       <button
                         type="button"

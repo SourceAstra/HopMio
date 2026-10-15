@@ -76,7 +76,7 @@ function useStudioState() {
             latest.spec
           ) {
             setSpec(
-              ['queued', 'running'].includes(latest.status)
+              ['queued', 'running'].includes(latest.status) || latest.kind === 'adjust'
                 ? latest.spec
                 : latest.prepared_spec || latest.spec,
             );
@@ -139,6 +139,7 @@ function useStudioState() {
           await refresh();
         } else if (['failed', 'canceled', 'interrupted'].includes(update.status)) {
           if (
+            update.kind !== 'adjust' &&
             update.prepared_spec &&
             currentId.current === update.project_id &&
             currentRevision.current === update.base_revision_id &&
@@ -258,14 +259,22 @@ function useStudioState() {
       setJob(j);
       return j;
     });
-  const organizeIdea = async (overridePrompt?: string) =>
+  const organizeIdea = async (
+    overridePrompt?: string,
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ) =>
     act(async () => {
       const activePrompt = overridePrompt !== undefined ? overridePrompt : spec.prompt;
       const targetSpec = overridePrompt !== undefined ? { ...spec, prompt: overridePrompt } : spec;
       const id = currentId.current;
       const revision = currentRevision.current;
       const cloud = !!preferences?.cloud_enabled && !!preferences?.chat_configured;
-      const organized = await call<Spec>('idea.interpret', { prompt: activePrompt, spec: targetSpec, cloud });
+      const organized = await call<Spec>('idea.interpret', {
+        prompt: activePrompt,
+        spec: targetSpec,
+        cloud,
+        history,
+      });
       if (
         currentId.current !== id ||
         currentRevision.current !== revision ||
@@ -274,9 +283,10 @@ function useStudioState() {
         setNotice('想法、材料或版本已改变，本次整理未覆盖当前设计。');
         return null;
       }
+      const finalPrompt = (organized.prompt && organized.prompt.trim()) || activePrompt;
       const updatedSpec: Spec = {
         ...organized,
-        prompt: activePrompt,
+        prompt: finalPrompt,
         modeling_plan: null,
         reconstruction_plan: null,
       };

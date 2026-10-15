@@ -8,6 +8,8 @@ import io
 import zipfile
 from pathlib import Path
 from PIL import Image
+import numpy as np
+import trimesh
 from ..processes import run
 from .bundling import pack_glb
 from .source_cache import digest, restore, save
@@ -38,6 +40,7 @@ class SurfaceBackend:
             self.slot.release()
 
     def _execute(self, request, inputs, job):
+        job.record(reconstruction_plan=request["surface_plan"])
         config = configuration()
         tools = tool_paths(config)
         staging = ROOT / ".artifacts/reconstruction-jobs"
@@ -105,6 +108,15 @@ class SurfaceBackend:
                 raise DomainError(name + " 没有保存约定的场景产物，后续操作已停止。", "RECONSTRUCTION_OUTPUT")
             with expected.open("rb") as stream:
                 job.tool_record(name, output={"file": expected.name, "bytes": expected.stat().st_size, "sha256": hashlib.file_digest(stream, "sha256").hexdigest()})
+            if name == "DensifyPointCloud":
+                points = expected.with_suffix(".ply")
+                cloud = trimesh.load(points, process=False) if points.is_file() else None
+                count = len(cloud.vertices) if isinstance(cloud, trimesh.PointCloud) else 0
+                quality["dense_points"] = count
+                job.record(reconstruction_quality=quality)
+                if count < 3 or not np.isfinite(cloud.vertices).all():
+                    raise DomainError(f"稠密重建只得到{count}个表面点，无法建立真实网格。相机配准通过不代表恢复了共同表面；请检查相邻视角、相机参数与主体范围。", "RECONSTRUCTION_DENSE")
+                (root / "quality.json").write_text(json.dumps(quality), encoding="utf-8")
         source = root / "source.glb"
         if not source.is_file() or not source.stat().st_size:
             raise DomainError("表面恢复没有输出扫描网格，请补拍清晰且重叠的照片。", "RECONSTRUCTION_SURFACE")

@@ -31,7 +31,7 @@ export function PhotoBuildButton({ compact = false }: { compact?: boolean }) {
 export function PhotoControls() {
   const s = useStudio();
   const [details, setDetails] = useState(false);
-  const scan = s.spec.provider === 'reconstruction';
+  const scan = s.spec.photo_policy !== 'parameters';
   const configured =
     hasCurrentPlan(s.spec) ||
     (!!s.preferences?.cloud_enabled &&
@@ -136,7 +136,9 @@ export function PhotoControls() {
           </div>
 
           <small>
-            一张照片可以开始；可配准的多角度照片用于恢复实际表面，缺失部分会注明推测。
+            {scan
+              ? `实物重建至少需要 ${s.preferences?.reconstruction?.min_photos || 3} 张重叠视角照片，建议覆盖正面、侧面、背面及顶部；照片数量达到门槛仍需通过实际配准。`
+              : '当前是照片参考创作：AI 会推测深度、背面与缺失细节，不能保证实物精确还原。'}
           </small>
         </div>
       {fidelity && (

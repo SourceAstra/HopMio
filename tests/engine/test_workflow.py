@@ -1,28 +1,31 @@
 import base64
 import io
+import json
 import time
+from types import SimpleNamespace
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 from yaha.service import Service
 from yaha.contracts import DesignSpec, PrintProfile, DomainError
-from yaha.geometry.models import generate_local, load_mesh
+from yaha.geometry.models import load_mesh
+from yaha.modeling.measurement import hits
 
 
 @pytest.fixture
 def service(tmp_path):
     instance = Service(tmp_path)
     yield instance
-    instance.jobs.executor.shutdown(wait=True)
-    instance.db.close()
+    instance.close()
 
 
 def wait(service, job):
-    for _ in range(100):
+    deadline = time.monotonic() + 180
+    while time.monotonic() < deadline:
         value = service.jobs.get(job["id"])
         if value["status"] not in ("queued", "running"):
             return value
-        time.sleep(0.05)
+        time.sleep(0.1)
     pytest.fail("job did not finish")
 
 
@@ -72,21 +75,23 @@ def test_full_workflow_versions_checks_export_and_restore(service):
 @pytest.mark.parametrize("mode", ["silhouette", "relief"])
 def test_images_become_closed_actual_mesh(service, mode):
     asset = image_asset(service)
-    mesh = generate_local(
-        DesignSpec(mode=mode, asset_ids=[asset["id"]], thickness_mm=3), service.assets
-    )
+    spec=DesignSpec(mode=mode, asset_ids=[asset["id"]], thickness_mm=3)
+    project=service.projects.create('图片几何验收',spec.model_dump())
+    job=wait(service,service.generate(project['id'],spec.model_dump()))
+    assert job['status']=='succeeded', job
+    mesh=load_mesh(service.assets.path(job['result']['project']['model']['stl_id']))
     assert mesh.is_watertight and mesh.volume > 0
     assert np.isclose(mesh.extents[1], 3)
 
 
 def test_settings_keys_not_exposed_and_quota(service, monkeypatch):
-    monkeypatch.setenv("MESHY_API_KEY", "not-a-real-secret")
+    monkeypatch.setenv("YAHA_AI_API_KEY", "not-a-real-secret")
     token = service.settings.unlock("123456")["token"]
     public = service.settings.update(token, {"cloud_enabled": True, "daily_limit": 1})
-    assert public["meshy_configured"] and "not-a-real-secret" not in str(public)
-    service.settings.reserve_cloud("meshy")
+    assert public["chat_configured"] and "not-a-real-secret" not in str(public)
+    service.settings.reserve_cloud("chat")
     with pytest.raises(DomainError):
-        service.settings.reserve_cloud("meshy")
+        service.settings.reserve_cloud("chat")
     with pytest.raises(DomainError):
         service.settings.update("bad", {"daily_limit": 2})
 
@@ -95,9 +100,10 @@ def test_asset_paths_and_disabled_cloud(service):
     with pytest.raises(DomainError):
         service.assets.path("../../private")
     project = service.bootstrap()["projects"][0]
+    service.planner=SimpleNamespace(design=lambda *args,**kwargs:service.settings.reserve_cloud('chat'))
     job = wait(
         service,
-        service.generate(project["id"], project["spec"] | {"provider": "meshy"}),
+        service.generate(project["id"], project["spec"] | {"provider": "parametric"}),
     )
     assert job["status"] == "failed" and job["error_code"] == "AI_DISABLED"
     assert service.projects.get(project["id"])["revision_id"] == project["revision_id"]
@@ -124,43 +130,47 @@ def test_profile_change_invalidates_check(service):
     assert service.projects.get(project["id"])["validation"] is None
 
 
-def test_local_adjustments_use_original_mesh_and_can_remove_hole(service):
+def test_local_regeneration_does_not_accumulate_holes(service):
     project = service.bootstrap()["projects"][0]
     first = wait(
         service, service.generate(project["id"], project["spec"] | {"hole": True})
     )
     assert first["status"] == "succeeded"
     current = first["result"]["project"]
+    manifest=json.loads(service.assets.path(current['model']['manifest_id']).read_text())
+    hole=manifest['finishing']['hole']
+    assert hole['removed_volume_mm3'] > 1
+    actual=load_mesh(service.assets.path(current['model']['stl_id']))
+    actual.apply_translation(-np.asarray(manifest['export_shift_m'])*1000)
+    origin=np.asarray(hole['center_mm']); origin[1]=actual.bounds[0,1]-1
+    assert not hits(actual,origin,np.array([0.,1.,0.]))
+    original_bytes=service.assets.path(current['model']['stl_id']).read_bytes()
     plain = wait(
         service,
-        service.generate(project["id"], current["spec"] | {"hole": False}, adjust=True),
+        service.generate(project["id"], current["spec"] | {"hole": False}),
     )
     assert plain["status"] == "succeeded"
     assert (
         plain["result"]["project"]["model"]["volume_mm3"]
         > current["model"]["volume_mm3"]
     )
-    assert (
-        plain["result"]["project"]["model"]["source_stl_id"]
-        == current["model"]["source_stl_id"]
-    )
+    assert service.assets.path(current['model']['stl_id']).read_bytes()==original_bytes
 
 
 def test_late_task_does_not_replace_restored_version(service, monkeypatch):
     import threading
-    import yaha.generation as module
 
     project = service.bootstrap()["projects"][0]
     entered = threading.Event()
     release = threading.Event()
-    original = module.generate_local
+    original = service.modeler.build
 
     def delayed(*args, **kwargs):
         entered.set()
-        release.wait(5)
+        release.wait(10)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(module, "generate_local", delayed)
+    monkeypatch.setattr(service.modeler, "build", delayed)
     job = service.generate(project["id"], project["spec"] | {"height_mm": 120})
     assert entered.wait(3)
     restored = service.call(

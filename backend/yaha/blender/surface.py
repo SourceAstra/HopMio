@@ -1,6 +1,7 @@
 """通用扫描表面：保留原件，另建制造副本；不使用人体或类别模板。"""
 
 import json
+import hashlib
 import math
 import shutil
 import bpy
@@ -50,10 +51,20 @@ def render_reference(camera_data, directory):
     camera.data.lens = k[0][0] * camera.data.sensor_width / width
     camera.data.shift_x = (width / 2 - k[0][2]) / width
     camera.data.shift_y = (k[1][2] - height / 2) * ratio / width
+    camera["yaha_reference_resolution"] = [width, height]
+    camera["yaha_reference_pixel_aspect"] = ratio
+    scene["yaha_reference_camera"] = camera.name
+    render_camera(camera, directory)
+    return camera
+
+
+def render_camera(camera, directory):
+    scene = bpy.context.scene
+    width, height = camera["yaha_reference_resolution"]
     scene.camera = camera
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
-    scene.render.pixel_aspect_x, scene.render.pixel_aspect_y = 1, ratio
+    scene.render.pixel_aspect_x, scene.render.pixel_aspect_y = 1, camera["yaha_reference_pixel_aspect"]
     scene.render.engine = "CYCLES"
     scene.cycles.device, scene.cycles.samples = "CPU", 16
     scene.render.film_transparent = True
@@ -64,7 +75,6 @@ def render_reference(camera_data, directory):
     scene.world.use_nodes = True
     scene.world.node_tree.nodes["Background"].inputs["Color"].default_value = (1, 1, 1, 1)
     bpy.ops.render.render(write_still=True)
-    return camera
 
 
 def evaluated_copy(source, name):
@@ -121,6 +131,8 @@ def build_surface(request, progress, directory):
     target_height = parameters["height"] / 1000 - lift
     progress(83, "保留扫描原件并制作闭合副本")
     body = evaluated_copy(source, "制造修补副本")
+    # 体素闭合会重建拓扑并丢失投影 UV；制造副本使用中性几何，真实贴图保留在扫描原件。
+    body.data.materials.clear()
     activate(body)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
     cleanup = weld_surface(body, max(height * 1e-7, 1e-10))
@@ -192,6 +204,14 @@ def export_surface(files, directory):
     if data["base"]:
         base.hide_set(True)
         base.hide_render = True
+    scene = bpy.context.scene
+    manufacturing_mesh = bpy.data.objects["制造模型"]
+    for obj in scene.objects:
+        if obj.type == "MESH":
+            obj.hide_render = obj != manufacturing_mesh
+    render_camera(bpy.data.objects[scene["yaha_reference_camera"]], directory)
+    data.update(comparison_basis="manufacturing_mesh", manufacturing_appearance="neutral_geometry", comparison_stl_sha256=hashlib.sha256(files["stl"].read_bytes()).hexdigest())
+    scene["yaha_surface"] = json.dumps(data, ensure_ascii=False)
     bpy.ops.file.pack_all()
     bpy.ops.wm.save_as_mainfile(filepath=str(files["blend"]), check_existing=False, compress=True)
     return files | {"source_glb": original, "manufacturing_glb": manufacturing, "comparison": directory / "comparison.png", "reference": directory / "reference.png"}, data

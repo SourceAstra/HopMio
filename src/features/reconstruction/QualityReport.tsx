@@ -1,15 +1,11 @@
 import { useStudio } from '../../state/StudioContext';
 import { isPhotoMode } from '../../theme/modes';
+import { reconstructionReport } from '../modeling/quality';
 
 export function QualityReport() {
   const s = useStudio();
   const currentJob = s.job?.project_id === s.project?.id ? s.job : null;
-  const report =
-    currentJob?.kind === 'generate' && currentJob.status !== 'succeeded'
-      ? currentJob.reconstruction_quality
-      : currentJob?.status === 'succeeded'
-        ? s.project?.model?.reconstruction || currentJob.reconstruction_quality
-        : currentJob?.reconstruction_quality || s.project?.model?.reconstruction;
+  const report = reconstructionReport(s.project?.model, currentJob);
   const diagnostics = currentJob?.reconstruction_diagnostics;
   const matching = currentJob?.photo_matching;
   if (isPhotoMode(s.spec.mode) && s.spec.provider === 'parametric') return null;
@@ -61,6 +57,12 @@ export function QualityReport() {
               <dt>相机求解三维点</dt>
               <dd>{report.sparse_points.toLocaleString()}</dd>
             </div>
+            {typeof report.dense_points === 'number' && (
+              <div>
+                <dt>稠密表面点</dt>
+                <dd>{report.dense_points.toLocaleString()}</dd>
+              </div>
+            )}
             <div>
               <dt>尺度来源</dt>
               <dd>

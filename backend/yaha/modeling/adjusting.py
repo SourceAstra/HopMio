@@ -6,6 +6,27 @@ from .references import reference_images
 from ..contracts import DomainError
 
 
+def validate_scope(previous, plan, target_part_id):
+    if not target_part_id:
+        return
+    before, after = compile_plan(previous), compile_plan(plan)
+    original = {step["id"]: {key: value for key, value in step.items() if key != "name"} for step in before["steps"]}
+    updated = {step["id"]: {key: value for key, value in step.items() if key != "name"} for step in after["steps"]}
+    if target_part_id not in original:
+        raise DomainError("点选部件已不在当前方案中，请重新选择修改区域。", "AI_ADJUSTMENT_SCOPE")
+    allowed = {target_part_id}
+    for step in before["steps"]:
+        if step.get("relative_to") in allowed:
+            allowed.add(step["id"])
+    for step in after["steps"]:
+        if step["id"] not in original:
+            if step.get("relative_to") not in allowed:
+                raise DomainError("新增工具未绑定点选部件，可能改变范围之外的几何；请使用 relative_to 限定目标。", "AI_ADJUSTMENT_SCOPE")
+            allowed.add(step["id"])
+    if before["surface"] != after["surface"] or any(updated.get(identifier) != step for identifier, step in original.items() if identifier not in allowed):
+        raise DomainError("AI 修改了点选部件之外的原有几何，原模型已保留。请重新限定调整要求。", "AI_ADJUSTMENT_SCOPE")
+
+
 def adjust_plan(service, spec, adjustment, project, job):
     previous = spec.modeling_plan
     vision = service.settings.public()["chat_supports_images"]
@@ -33,7 +54,11 @@ def adjust_plan(service, spec, adjustment, project, job):
         }
         job.record(ai_diagnostics=value, message=stages.get(phase, "AI 正在理解细节调整要求"))
 
-    plan = service.editor.adjust(spec, images, adjustment.instruction, preview, observe, location_image=location_image)
+    instruction = adjustment.instruction
+    if adjustment.target_part_id:
+        instruction += f"\n执行范围：仅修改部件 {adjustment.target_part_id} 及其 relative_to 子部件；新增工具必须通过 relative_to 绑定该目标或其子部件，保留其他原有几何。"
+    plan = service.editor.adjust(spec, images, instruction, preview, observe, location_image=location_image)
+    validate_scope(previous, plan, adjustment.target_part_id)
     before, after = compile_plan(previous), compile_plan(plan)
     if compiled_geometry(before) == compiled_geometry(after):
         raise DomainError("建模 AI 返回了与原方案相同的几何，调整未执行，原模型已保留。", "AI_ADJUSTMENT_UNCHANGED")

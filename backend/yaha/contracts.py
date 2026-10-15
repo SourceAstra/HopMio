@@ -49,7 +49,7 @@ class DesignSpec(BaseModel):
             plan = data.get("modeling_plan")
             if plan and plan.get("schema_version") == 1:
                 data["modeling_plan"] = None
-            if data.get("provider") not in ("local", "parametric"):
+            if data.get("provider", "local") not in ("local", "parametric", "reconstruction"):
                 data["provider"] = "parametric"
             data["schema_version"] = 3
         if data.get("schema_version", 1) in (1, 2, 3, 4):
@@ -67,6 +67,7 @@ class ModelAdjustment(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, allow_inf_nan=False)
     schema_version: Literal[1] = 1
     instruction: str = Field(min_length=1, max_length=2000)
+    target_part_id: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9_]{0,47}$")
     location_asset_id: str | None = Field(default=None, max_length=80)
     location_point: tuple[Annotated[float, Field(ge=0, le=100)], Annotated[float, Field(ge=0, le=100)]] | None = None
 

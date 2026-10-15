@@ -8,6 +8,7 @@ from .contracts import GeometryPlan
 from .compiler import compile_plan, compiled_geometry
 from .prompts import render_prompts
 from .references import reference_images
+from .intent import validate_intent
 from ..ai.client import JSONModelClient
 from ..contracts import DesignSpec, DomainError
 
@@ -49,8 +50,8 @@ class CloudModelingPlanner:
             if observer:
                 observer({"phase": "validating", "plan_draft": data, "attempt": attempt + 1})
             try:
-                if data.get("schema_version") != 4:
-                    raise DomainError("新方案必须使用 schema_version=4，所有部件显式填写 coordinate_origin；旧版本仅用于读取历史作品。", "PLAN_COORDINATES")
+                if data.get("schema_version") != 6:
+                    raise DomainError("新方案必须使用 schema_version=6，所有部件显式填写 coordinate_origin；旧版本仅用于读取历史作品。", "PLAN_COORDINATES")
                 plan = GeometryPlan.model_validate(data)
                 if any(view.photo_index >= len(spec.asset_ids) for view in plan.reference_views):
                     raise DomainError("照片视角序号超出本次材料范围。", "AI_PLAN_INVALID")
@@ -66,6 +67,7 @@ class CloudModelingPlanner:
                 if not plan.constraints:
                     raise DomainError("AI 方案缺少可复测尺寸。", "AI_PLAN_INVALID")
                 compiled = compile_plan(plan)
+                validate_intent(spec, plan, compiled, adjustment)
                 if adjustment and spec.modeling_plan:
                     previous = compile_plan(spec.modeling_plan)
                     if compiled_geometry(compiled) == compiled_geometry(previous):

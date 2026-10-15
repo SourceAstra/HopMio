@@ -18,6 +18,7 @@ from .ai.client import CloudJSONClient
 from .modeling.planner import CloudModelingPlanner, ModelingPlanner, ModelingReviewer, ModelingEditor, start_design
 from .modeling.outlines import OpenCVOutlineFitter, OutlineFitter
 from .modeling.assessment import CloudPhotoAssessor, PhotoAssessor
+from .modeling.design_review import CloudDesignAssessor, DesignAssessor
 from .reconstruction.planner import start_design as start_surface_design
 from .reconstruction.backend import SurfaceBackend
 from .reconstruction.observations import OpenCVPhotoObserver
@@ -28,7 +29,7 @@ from .exporting import export_project
 
 
 class Service:
-    def __init__(self, root, planner: ModelingPlanner | None = None, modeler: ModelingBackend | None = None, reviewer: ModelingReviewer | None = None, outline_fitter: OutlineFitter | None = None, editor: ModelingEditor | None = None, assessor: PhotoAssessor | None = None):
+    def __init__(self, root, planner: ModelingPlanner | None = None, modeler: ModelingBackend | None = None, reviewer: ModelingReviewer | None = None, outline_fitter: OutlineFitter | None = None, editor: ModelingEditor | None = None, assessor: PhotoAssessor | None = None, design_assessor: DesignAssessor | None = None):
         self.db = Database(Path(root))
         self.assets = Assets(self.db)
         self.projects = Projects(self.db)
@@ -44,6 +45,7 @@ class Service:
         client = CloudJSONClient(self.settings)
         cloud = CloudModelingPlanner(client)
         self.assessor: PhotoAssessor | None = assessor or (CloudPhotoAssessor(client) if planner is None else None)
+        self.design_assessor: DesignAssessor | None = design_assessor or (CloudDesignAssessor(client) if planner is None else None)
         self.planner: ModelingPlanner = planner or cloud
         self.reviewer: ModelingReviewer | None = reviewer or (cloud if planner is None else None)
         self.editor: ModelingEditor | None = editor or (cloud if planner is None else None)
@@ -128,6 +130,7 @@ class Service:
                 self.settings,
                 self.assets,
                 p.get("cloud", False),
+                history=p.get("history"),
             )
         if method == "idea.adjustment":
             spec = DesignSpec.model_validate(p.get("spec", {})).model_dump()

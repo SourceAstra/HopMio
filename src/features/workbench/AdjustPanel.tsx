@@ -105,10 +105,10 @@ export function AdjustPanel({
             <h2>
               <Scissors size={18} /> 阶段 B: Blender 切平定标
             </h2>
-            <span className="pill success">Bed Cut 刀刃切平</span>
+            <span className="pill">制造参数</span>
           </div>
           <p className="tuning-desc">
-            接管阶段 A 裸网格：执行微破洞缝合、拉普拉斯微光顺与<strong>打印床水平切平</strong>，消除悬空点，确保首层 100% 牢固附着。
+            制作制造副本并复测尺寸。底座可以增加支撑面积；首层接触、薄壁和悬空部位需要在实际切片预览中检查。
           </p>
           <div className="tuning-items">
             <label className="toggle-row">
@@ -120,8 +120,8 @@ export function AdjustPanel({
               <strong>加厚稳固打印基座 (Bed Plate)</strong>
             </label>
             <div className="tuning-metric-row">
-              <span>接触面平整度</span>
-              <strong className="text-green">Bed Cut: 水平校准</strong>
+              <span>首层接触检查</span>
+              <strong>待实际切片确认</strong>
             </div>
             <div className="tuning-metric-row">
               <span>毫米级定标尺寸</span>
@@ -167,14 +167,14 @@ export function AdjustPanel({
                   className="primary generate adjust-apply-btn"
                   disabled={s.running || s.busy || !s.canGenerate}
                   onClick={() => void s.generate()}
-                  title="按修改后的参数在本地 Blender 重新生成模型（不消耗云端 AI）"
+                  title="按修改后的参数在 Blender 重新生成模型，并由 AI 审阅实际成品"
                 >
                   <Blocks size={15} /> {s.dirty ? '应用修改 · 重新生成模型' : '重新生成 3D 模型'}
                 </button>
               </div>
               <p className="muted">
                 {s.spec.modeling_plan
-                  ? '只修改方案参数；部件尺寸和壁厚由方案关系推导。生成不调用 AI。'
+                  ? '部件尺寸和壁厚由方案关系推导；生成后调用 AI 审阅成品，必要时提出一次修订。'
                   : '先让 AI 设计方案，再在这里确认和调整参数。'}
               </p>
             </>

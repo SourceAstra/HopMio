@@ -89,6 +89,7 @@ class CloudJSONClient:
         body.update(protocol.effort(limits.get("reasoning_effort")))
         started, last = time.monotonic(), 0
         decoder = protocol.decoder()
+        text = ""
 
         def report(phase=None, **extra):
             if observer:
@@ -139,5 +140,5 @@ class CloudJSONClient:
             report("failed", error_type="RequestError")
             raise DomainError("模型连接失败或超时，没有自动重试，请检查网络和服务记录。", "AI_NETWORK") from None
         except (ValueError, TypeError, KeyError, IndexError) as error:
-            report("failed", error_type=type(error).__name__)
+            report("failed", error_type=type(error).__name__, response_excerpt=text[:2048])
             raise DomainError(f"模型响应格式无效（{type(error).__name__}），没有取得完整 JSON。", "AI_RESPONSE") from None

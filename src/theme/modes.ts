@@ -48,15 +48,15 @@ export const modes: {
   {
     id: 'image',
     name: '照片变立体',
-    description: '一张开始，补充照片继续细化造型',
-    badge: '参考造型',
+    description: '上传重叠多视角照片还原实物，单张照片可选参考创作',
+    badge: '实物 / 创作',
     emoji: '🧸',
   },
   {
     id: 'multiview',
-    name: '多角度参考',
-    description: '补充侧面、背面和细节，继续完善造型',
-    badge: '持续细化',
+    name: '多角度实物重建',
+    description: '配准重叠照片，恢复实际观测到的表面与比例',
+    badge: '实物重建',
     emoji: '📸',
   },
   {

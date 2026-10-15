@@ -5,10 +5,12 @@ import math
 from pathlib import Path
 import bmesh
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 from loft import loft
 from sweep import sweep
 from cushion import cushion
+from rounded_box import rounded_box
+from lettering import lettering
 
 
 def activate(obj):
@@ -101,6 +103,18 @@ def boolean(body, cutter, operation):
     return body
 
 
+def volume_mm3(obj):
+    bpy.context.view_layer.update()
+    evaluated = obj.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    bm = bmesh.new()
+    try:
+        bm.from_mesh(evaluated.data)
+        bm.transform(evaluated.matrix_world)
+        return abs(bm.calc_volume(signed=True)) * 1e9
+    finally:
+        bm.free()
+
+
 def cup(step):
     width, _, height = step["size_mm"]
     wall, bottom = step["wall_mm"], step["bottom_mm"]
@@ -113,7 +127,7 @@ def cup(step):
     return boolean(outer, inner, "DIFFERENCE")
 
 
-FACTORIES = {**{name: primitive for name in ("box", "cylinder", "ellipsoid")}, "star": star, "polygon": profile, "revolve": revolve, "loft": loft, "sweep": sweep, "cushion": cushion, "usagi": usagi, "cup": cup}
+FACTORIES = {**{name: primitive for name in ("box", "cylinder", "ellipsoid")}, "rounded_box": rounded_box, "text": lettering, "star": star, "polygon": profile, "revolve": revolve, "loft": loft, "sweep": sweep, "cushion": cushion, "usagi": usagi, "cup": cup}
 OPERATIONS = {"add": "UNION", "subtract": "DIFFERENCE", "intersect": "INTERSECT"}
 
 
@@ -128,12 +142,12 @@ def part(step):
         for vertex in obj.data.vertices:
             if step.get("coordinate_origin", "bounds_center") == "bounds_center":
                 vertex.co -= center
-            if step["shape"] in ("revolve", "loft", "sweep"):
+            if step["shape"] in ("revolve", "loft", "sweep", "rounded_box"):
                 vertex.co /= 1000
-        if step["shape"] in ("revolve", "loft", "sweep"):
+        if step["shape"] in ("revolve", "loft", "sweep", "rounded_box", "text"):
             obj.data.update()
             bpy.context.view_layer.update()
-            if step["shape"] != "sweep" and any(abs(actual * 1000 - expected) > 0.01 for actual, expected in zip(obj.dimensions, step["size_mm"])):
+            if step["shape"] not in ("sweep", "text") and any(abs(actual * 1000 - expected) > 0.01 for actual, expected in zip(obj.dimensions, step["size_mm"])):
                 raise ValueError("轮廓或放样尺寸与 size_mm 不一致，禁止整体缩放。")
         else:
             obj.dimensions = [size / 1000 for size in step["size_mm"]]
@@ -149,7 +163,7 @@ def part(step):
     if step["bevel_mm"]:
         modifier = obj.modifiers.new("圆角", "BEVEL")
         modifier.width = step["bevel_mm"] / 1000
-        modifier.segments = 4
+        modifier.segments = segments(step["bevel_mm"]) // 4
     bpy.context.view_layer.update()
     return obj
 
@@ -188,7 +202,7 @@ def input_mesh(request):
 
 def build_scene(request, progress, directory=None):
     bpy.context.scene["yaha_plan"] = json.dumps(request.get("source_plan", request.get("plan", {})), ensure_ascii=False)
-    features, body = {}, None
+    features, body, effects, boolean_effects = {}, None, [], []
     if request.get("heightmap"):
         from heightmap import build_heightmap
         body = build_heightmap(request)
@@ -207,7 +221,12 @@ def build_scene(request, progress, directory=None):
                     obj.location -= Vector(request["reference_shift_m"])
     for index, step in enumerate(request.get("plan", {}).get("steps", [])):
         progress(15 + int(55 * (index + 1) / len(request["plan"]["steps"])), "制作部件：" + step["name"])
+        if step["shape"] == "text":
+            step = step | {"font_path": request["input_files"][step["font_file"]]}
         obj = part(step)
+        if step.get('frame_m'):
+            obj.matrix_world = Matrix(step['frame_m'])
+            bpy.context.view_layer.update()
         # 复制独立部件保留层级元数据，供前端装配体视口拾取与高亮
         preview_mesh = bpy.data.meshes.new_from_object(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()))
         preview_obj = bpy.data.objects.new(step["id"] + " · " + step["name"], preview_mesh)
@@ -222,7 +241,18 @@ def build_scene(request, progress, directory=None):
         preview_obj.hide_viewport = True
         if step["shape"] == "cup":
             features[step["id"]] = {"frame_m": [list(row) for row in obj.matrix_world], "height_mm": step["size_mm"][2], "radius_mm": step["size_mm"][0] / 2}
+        before = volume_mm3(body) if body is not None else None
         body = obj if body is None else boolean(body, obj, OPERATIONS[step["operation"]])
+        if before is not None:
+            after = volume_mm3(body)
+            changed = after - before if step["operation"] == "add" else before - after
+            if changed <= 1e-4:
+                raise ValueError("工具未改变实际实体体积，请修正位置、朝向、切入深度与交叠关系：" + step["id"] + " · " + step["name"])
+            boolean_effects.append({"id": step["id"], "operation": step["operation"], "volume_change_mm3": changed})
+            if step["shape"] == "text":
+                effects.append({"id": step["id"], "text": step["text"], "operation": step["operation"], "volume_change_mm3": changed})
+    bpy.context.scene["yaha_lettering_effects"] = json.dumps(effects, ensure_ascii=False)
+    bpy.context.scene["yaha_boolean_effects"] = json.dumps(boolean_effects)
     if body is None:
         raise ValueError("没有可执行的建模部件。")
     if request.get("plan", {}).get("surface"):

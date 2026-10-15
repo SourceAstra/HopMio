@@ -30,6 +30,7 @@ interface ChatInputDockProps {
   onVoiceInput: () => void;
   onOrganizeIdea?: () => void;
   hasPhotos: boolean;
+  tuningSuggestions?: Array<{ label: string; value: string }>;
 }
 
 export function ChatInputDock({
@@ -51,21 +52,16 @@ export function ChatInputDock({
   onVoiceInput,
   onOrganizeIdea,
   hasPhotos,
+  tuningSuggestions,
 }: ChatInputDockProps) {
   const locationInputRef = useRef<HTMLInputElement>(null);
 
   const quickChips =
     mode === 'tune'
-      ? [
-          { label: '+耳朵长一点', value: '让耳朵再长一点' },
-          { label: '+身体更圆滚滚', value: '身体更矮胖圆润' },
-          { label: '+去掉多余底座', value: '去掉多余底座，脚掌直接平整落地' },
-          { label: '+加厚稳固底座', value: '加厚平整稳固底座' },
-          { label: '+放大ω微笑', value: '把开心的ω微笑嘴角加大加深' },
-        ]
+      ? tuningSuggestions || []
       : [
           { label: '🥕 胡萝卜印章', value: '乌萨奇同款胡萝卜手办印章，底部平整带抓握手柄' },
-          { label: '🐰 80mm 元气立牌', value: '乌萨奇开心招手元气立牌，高80mm自带稳固底座' },
+          { label: '✦ 80mm 元气立牌', value: '乌萨奇开心招手元气立牌，高80mm自带稳固底座' },
           { label: '🦖 呆萌小恐龙', value: '圆滚滚胖嘟嘟的呆萌绿色小恐龙桌面摆件' },
           { label: '🏷️ 名字钥匙扣', value: '带有挂绳圆孔的个性防丢名字钥匙扣，四周圆润倒角' },
         ];
@@ -131,6 +127,8 @@ export function ChatInputDock({
           <button
             type="button"
             className={`mode-select-tab ${mode === 'tune' ? 'active' : ''}`}
+            disabled={isBusy || !canTune}
+            title={canTune ? '修改当前模型的局部细节' : '当前模型或 AI 服务暂不支持局部微调'}
             onClick={() => onModeChange('tune')}
           >
             <Wand2 size={12} />
@@ -146,6 +144,12 @@ export function ChatInputDock({
             <span>✦ 整体灵感</span>
           </button>
         </div>
+      )}
+
+      {hasModel && !canTune && (
+        <small className="tune-howto">
+          当前模型或 AI 服务暂不支持局部微调。整体灵感会规划新造型，旧版本会保留。
+        </small>
       )}
 
       {/* 统一输入框卡片 */}
@@ -268,7 +272,7 @@ export function ChatInputDock({
               className="dock-send-btn"
               disabled={isBusy || !text.trim() || (mode === 'tune' && (!canTune || !cloudReady))}
               onClick={onSubmit}
-              title={mode === 'tune' ? '发送微调想法，由乌萨奇生成建议' : '发送想法并生成 3D 模型'}
+              title={mode === 'tune' ? '发送微调想法，由乌萨奇生成建议' : '发送创意想法，由乌萨奇智能整理'}
             >
               {isBusy ? (
                 <span className="btn-loading-spinner" />
@@ -279,8 +283,8 @@ export function ChatInputDock({
                 </>
               ) : (
                 <>
-                  <Send size={13} />
-                  <span>{hasModel ? '重新生成' : '一键建模'}</span>
+                  <Sparkles size={13} />
+                  <span>整理想法</span>
                 </>
               )}
             </button>

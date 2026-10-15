@@ -26,6 +26,7 @@ export function Hall() {
       ...old,
       mode: modeId,
       provider: providerForMode(modeId),
+      photo_policy: modeId === 'image' ? 'parameters' : modeId === 'multiview' ? 'surface' : old.photo_policy,
       asset_ids: [],
     }));
     s.setRoom(targetRoom);
@@ -152,10 +153,10 @@ export function Hall() {
           >
             <div className="mode-card-badge-row">
               <span className="mode-card-emoji">🧸</span>
-              <span className="mode-badge-pill">照片变立体</span>
+              <span className="mode-badge-pill">参考创作</span>
             </div>
-            <h3>一张照片变立体</h3>
-            <p>一张宠物的正面照、心爱画作或纪念照片，让它长出厚度与浮雕立体造型。</p>
+            <h3>照片参考创作</h3>
+            <p>按照片设计完整三维造型，深度与背面含 AI 推测；精确还原实物请选择多视角重建。</p>
             <div className="mode-card-footer">
               <span className="mode-action-link">
                 选择心意照片 <ArrowRight size={14} />

@@ -3,13 +3,15 @@
 import json
 from .compiler import compile_plan
 from .templates import template_plan
+from .fonts import lettering_inputs
+from .intent import validate_intent
 from ..contracts import DomainError, Mode
 from ..geometry.images import contour, heights
 from ..geometry.models import load_mesh
 from ..reconstruction.preparing import prepare as prepare_surface
 
 
-def prepare(spec, assets, repair=False, *, job=None, observer=None):
+def prepare(spec, assets, repair=False, *, job=None, observer=None, adjustment_intent=None):
     if spec.provider == "reconstruction":
         return prepare_surface(spec, assets, job=job, observer=observer)
     if spec.provider == "parametric":
@@ -19,9 +21,10 @@ def prepare(spec, assets, repair=False, *, job=None, observer=None):
         if not plan.constraints:
             raise DomainError("方案没有可复测的尺寸约束，请重新设计。", "PLAN_MEASUREMENT")
         request = {"plan": compile_plan(plan)}
+        validate_intent(spec, plan, request["plan"], adjustment_intent)
         if plan.surface:
             request["finish"] = {"base": spec.base and not any(step.id == "base" for step in plan.steps), "hole": False, "thickness_mm": spec.bottom_mm, "footprint": True}
-        return request, {}, plan
+        return request, lettering_inputs(request["plan"]), plan
     if spec.mode == Mode.TEXT:
         if spec.asset_ids:
             raise DomainError("参数模板不会处理照片。请切换到 AI 参数建模，先设计照片方案。", "PLAN_REQUIRED")

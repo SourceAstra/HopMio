@@ -8,7 +8,7 @@ def photo_completion(review):
         return {"status": "completed", "message": "作品做好啦！"}
     state = "draft" if review["status"] != "accepted" else review["scope"]
     messages = {
-        "draft": "待改进草稿已保存，照片外观未通过验收。",
+        "draft": "待改进草稿已保存，成品造型未通过审阅。" if review.get("schema_version") == "yaha.design-review/v1" else "待改进草稿已保存，照片外观未通过验收。",
         "design_intent": "模型已生成并通过造型意图审阅。",
         "photo_reference": "模型已生成并通过照片外观审阅。",
     }

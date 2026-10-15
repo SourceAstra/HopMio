@@ -17,7 +17,7 @@ export default defineConfig(({ command }) => ({
   ],
   base: './',
   build: {
-    outDir: 'dist',
+    outDir: '.artifacts/web',
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {

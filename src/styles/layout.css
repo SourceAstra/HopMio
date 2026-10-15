@@ -661,6 +661,14 @@
 }
 
 @media (max-width: 650px) {
+  .brand {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .brand-title-line strong {
+    font-size: 17px;
+    white-space: nowrap;
+  }
   .topbar {
     padding: 0 14px;
     height: 60px;
@@ -670,7 +678,10 @@
     display: none;
   }
   .app-body {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 60px);
+    max-height: calc(100dvh - 60px);
   }
   .sidebar {
     position: static;
@@ -679,6 +690,7 @@
     border-bottom: 1.5px solid var(--line);
     padding: 10px 14px;
     border-radius: 0;
+    flex-shrink: 0;
   }
   .sidebar-brand-cottage {
     display: none;
@@ -699,6 +711,9 @@
   }
   .app-body main {
     padding: 16px;
+    flex: 1;
+    min-height: 0;
+    height: auto;
   }
 }
 

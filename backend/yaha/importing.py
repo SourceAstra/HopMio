@@ -64,6 +64,10 @@ def import_package(encoded, assets, projects):
             model = {"stl_id": stl, "glb_id": store("model.glb", ".glb", units=preview_units), "preview_units": preview_units,
                      "size_mm": mesh.extents.round(3).tolist(), "faces": len(mesh.faces), "volume_mm3": round(abs(mesh.volume), 3),
                      "origin": "作品包恢复", "precision_status": "unverified", "measurements": []}
+            reviews = {key: data.get("model", {})[key] for key in ("design_review", "photo_review") if data.get("model", {}).get(key)}
+            if reviews:
+                model["design_review"] = {"schema_version": "yaha.design-review/v1", "status": "draft_retained", "scope": "design_intent",
+                                          "message": "历史造型审阅已保留；恢复版本尚未重新审阅。", "imported_history": True, "previous_reviews": reviews}
             for name, (key, units) in MODEL_FILES.items():
                 if name in names:
                     model[key] = store(name, "." + name.rsplit(".", 1)[-1], units=units)

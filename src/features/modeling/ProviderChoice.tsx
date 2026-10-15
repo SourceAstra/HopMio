@@ -5,9 +5,8 @@ export function ProviderChoice() {
   const s = useStudio();
   const photos = ['image', 'multiview'].includes(s.spec.mode);
   const options = photos ? [
-    { id: 'auto', label: '自动 · 照片约束优先', detail: '恢复可观测表面，不足时保留注明推测的轮廓草稿' },
-    { id: 'parameters', label: '照片参考设计', detail: '保留参数与设计补全，适合自由调整造型' },
-    { id: 'surface', label: '严格表面恢复', detail: '只使用真实配准观测，条件不足时保留原作品' },
+    { id: 'auto', label: '实物表面重建', detail: '用重叠多视角恢复实物；观测不足时提示补拍并保留原作品' },
+    { id: 'parameters', label: '照片参考设计 · 含推测', detail: 'AI 推断缺失深度与背面，适合创作；不能作为精确实物还原' },
   ] : [
     {
       id: 'parametric',
@@ -25,10 +24,10 @@ export function ProviderChoice() {
         {options.map((option) => (
           <button
             key={option.id}
-            aria-pressed={(photos ? s.spec.photo_policy || 'auto' : s.spec.provider) === option.id}
+            aria-pressed={(photos ? s.spec.photo_policy === 'parameters' ? 'parameters' : 'auto' : s.spec.provider) === option.id}
             disabled={s.busy || s.running}
             onClick={() => s.setSpec((old) => photos
-              ? { ...old, photo_policy: option.id as Spec['photo_policy'], provider: option.id === 'surface' ? 'reconstruction' : option.id === 'parameters' ? 'parametric' : old.provider }
+              ? { ...old, photo_policy: option.id as Spec['photo_policy'], provider: option.id === 'parameters' ? 'parametric' : 'reconstruction' }
               : { ...old, provider: option.id })}
           >
             <strong>{option.label}</strong>

@@ -51,7 +51,7 @@ def export_project(project, assets, format):
             raise DomainError("当前模型尚未完成实际切片。")
         return assets.db.get("assets", report["asset_id"])
     if format in ("stl", "glb", "blend", "source_glb", "manufacturing_glb"):
-        identifier = project["model"].get(f"{format}_id")
+        identifier = (project["model"].get("manufacturing_glb_id") if format == "glb" else None) or project["model"].get(f"{format}_id")
         if not identifier:
             raise DomainError("这个旧版本没有 Blender 源工程，请生成新版本。")
         return assets.db.get("assets", identifier)
@@ -60,7 +60,7 @@ def export_project(project, assets, format):
         content = three_mf(mesh)
     elif format == "usagi":
         out = io.BytesIO()
-        files = {"model." + extension: assets.path(project["model"][extension + "_id"]).read_bytes() for extension in ("stl", "glb")}
+        files = {"model." + extension: assets.path((project["model"].get("manufacturing_glb_id") if extension == "glb" else None) or project["model"][extension + "_id"]).read_bytes() for extension in ("stl", "glb")}
         for name, (key, _) in MODEL_FILES.items():
             if project["model"].get(key):
                 files[name] = assets.path(project["model"][key]).read_bytes()

@@ -2,6 +2,8 @@
 
 import math
 import operator
+import numpy as np
+from scipy.spatial.transform import Rotation
 from shapely.geometry import LineString, Polygon
 from .contracts import Expression, Reference
 from ..contracts import DomainError
@@ -70,7 +72,7 @@ def compile_plan(plan):
         data["size_mm"] = [resolve(item, plan.parameters) for item in step.size_mm] if step.size_mm else None
         data["rotation_deg"] = [resolve(item, plan.parameters, "deg") for item in step.rotation_deg]
         data["points"] = [[resolve(item, plan.parameters, "ratio" if step.shape == "cushion" else "mm") for item in point] for point in step.points]
-        for field in ("wall_mm", "bottom_mm", "bevel_mm"):
+        for field in ("wall_mm", "bottom_mm", "bevel_mm", "corner_radius_mm"):
             data[field] = resolve(getattr(step, field), plan.parameters)
         data["sections"] = [{"z_mm": resolve(section.z_mm, plan.parameters), "width_mm": resolve(section.width_mm, plan.parameters), "depth_mm": resolve(section.depth_mm, plan.parameters), "offset_mm": [resolve(item, plan.parameters) for item in section.offset_mm], "exponent": section.exponent} for section in step.sections]
         data["path"] = [{"position_mm": [resolve(item, plan.parameters) for item in section.position_mm], "width_mm": resolve(section.width_mm, plan.parameters), "depth_mm": resolve(section.depth_mm, plan.parameters), "twist_deg": resolve(section.twist_deg, plan.parameters, "deg")} for section in step.path]
@@ -88,7 +90,8 @@ def compile_plan(plan):
                 raise DomainError("放样截面的实际包围尺寸须在0.8–500毫米以内。", "PLAN_RANGE")
             # 放样截面决定真实包围尺寸；size_mm 是派生值，禁止因重复字段误差而拉伸或拒绝有效截面。
             data["size_mm"] = dimensions
-        if any(not (0.4 if step.shape == "sweep" else 0.8) <= size <= 500 for size in data["size_mm"]):
+        minimum = [0.8, 0.8, 0.1] if step.shape == "text" else [0.4 if step.shape == "sweep" else 0.8] * 3
+        if any(not low <= size <= 500 for low, size in zip(minimum, data["size_mm"])):
             raise DomainError("部件尺寸应在 0.8–500 毫米以内。", "PLAN_RANGE")
         if any(abs(pos) > 500 for pos in data["center_mm"]):
             raise DomainError("部件位置超出范围。", "PLAN_RANGE")
@@ -96,6 +99,8 @@ def compile_plan(plan):
             raise DomainError("旋转角度超出范围。", "PLAN_RANGE")
         if not 0 <= data["bevel_mm"] < min(data["size_mm"]) / 2:
             raise DomainError("圆角超过部件可用尺寸。", "PLAN_RANGE")
+        if step.shape == "rounded_box" and not 0 <= data["corner_radius_mm"] < min(data["size_mm"][:2]) / 2:
+            raise DomainError("矩形平面圆角半径必须小于宽长的一半，与板厚独立。", "PLAN_RANGE")
         if step.shape == "cup":
             if step.operation != "add":
                 raise DomainError("带壁厚圆筒须作为实体添加，挖孔请使用圆柱。", "PLAN_GEOMETRY")
@@ -119,6 +124,17 @@ def compile_plan(plan):
                 midpoint = [(max(s["offset_mm"][i] + s[key] / 2 for s in sections) + min(s["offset_mm"][i] - s[key] / 2 for s in sections)) / 2 for i, key in enumerate(("width_mm", "depth_mm"))] + [(sections[0]["z_mm"] + sections[-1]["z_mm"]) / 2]
                 if any(abs(position) > 0.01 for position in midpoint):
                     raise DomainError(f"放样 {step.id} 选择了 bounds_center，但截面包围中心为 {midpoint} mm。将局部截面围绕零点设计并用 center_mm 放置，或选择 local_origin 保留截面坐标；禁止混用两种坐标语义。", "PLAN_COORDINATES")
+        frame = np.eye(4)
+        frame[:3, :3] = Rotation.from_euler('xyz', data['rotation_deg'], degrees=True).as_matrix()
+        frame[:3, 3] = np.asarray(data['center_mm']) / 1000
+        if step.relative_to:
+            parent = next((item for item in steps if item['id'] == step.relative_to), None)
+            if plan.schema_version < 6 or parent is None:
+                raise DomainError("相对部件坐标须使用 v6 并引用更早的部件，不能前向引用或形成环。", "PLAN_COORDINATES")
+            frame = np.asarray(parent['frame_m']) @ frame
+        if np.any(np.abs(frame[:3, 3]) > 0.5 + 1e-9):
+            raise DomainError("组合后的部件世界坐标超出500毫米范围。", "PLAN_RANGE")
+        data['frame_m'] = frame.tolist()
         steps.append(data)
     constraints = []
     cups = {step["id"] for step in steps if step["shape"] == "cup"}
@@ -139,6 +155,8 @@ def compile_plan(plan):
                     constraints.append({"feature": name, "expected_mm": step[feature + "_mm"], "max_error_mm": 0.01})
     surface = None
     if plan.surface:
+        if any(step.shape == "text" for step in plan.steps):
+            raise DomainError("真实文字须保留精确实体模式（surface=null），禁止在刻字后体素重塑并抹掉细节。", "PLAN_GEOMETRY")
         surface = {"height_mm": resolve(plan.surface.height_mm, plan.parameters), "voxel_mm": resolve(plan.surface.voxel_mm, plan.parameters), "smooth_iterations": plan.surface.smooth_iterations}
         if not 10 <= surface["height_mm"] <= 500 or not 0.12 <= surface["voxel_mm"] <= 1:
             raise DomainError("参考造型高度须在10–500毫米，曲面精度须在0.12–1毫米。", "PLAN_RANGE")

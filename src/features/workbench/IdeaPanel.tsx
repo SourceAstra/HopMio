@@ -67,7 +67,16 @@ export function IdeaPanel({
   const prevProjectIdRef = useRef(projectId);
   const prevRevisionRef = useRef(s.project?.revision_id);
   const modelSpec = adjustmentSpec(s.project, s.spec);
-  const canTune = !!modelSpec;
+  const canTune = !!modelSpec && !!s.preferences?.chat_supports_images;
+  const selectedStep = modelSpec?.modeling_plan?.steps.find((step) => step.id === selectedPartId);
+  const suggestionReferences = JSON.stringify(selectedStep || modelSpec?.modeling_plan?.steps || []);
+  const tuningSuggestions = Object.entries(modelSpec?.modeling_plan?.parameters || {})
+    .filter(([name, parameter]) => !parameter.locked && suggestionReferences.includes(JSON.stringify({ parameter: name }).slice(1, -1)))
+    .slice(0, 4)
+    .map(([, parameter]) => ({
+      label: `调整${parameter.label}`,
+      value: `将${parameter.label}调整为${Number((parameter.value * 1.1).toFixed(2))} ${parameter.unit}，其余部件与细节保持不变`,
+    }));
   const cloudReady = !!s.preferences?.cloud_enabled && !!s.preferences?.chat_configured;
   const activeModelName =
     s.preferences?.models?.find((m) => m.id === s.preferences?.active_model)?.name ||
@@ -189,7 +198,7 @@ export function IdeaPanel({
     if (!text || s.busy || s.running) return;
     setIsRibbonOpen(false);
 
-    if (mode === 'tune') {
+    if (mode === 'tune' && canTune) {
       if (!modelSpec || !cloudReady) return;
 
       // 提取点选位置上下文
@@ -256,6 +265,7 @@ export function IdeaPanel({
               revision,
               specSnapshot,
               selectionSnapshot,
+              targetPartId: selectedPartId || undefined,
               locationAssetId,
               locationPointSnapshot,
               applied: false,
@@ -272,7 +282,7 @@ export function IdeaPanel({
         }
       });
     } else {
-      // 整体灵感模式
+      // 整体灵感模式：整理想法与提炼物理规格，而非直接一步生成 3D 模型
       const userMsg: ChatMessage = {
         id: `user-${Date.now()}`,
         sender: 'user',
@@ -286,13 +296,37 @@ export function IdeaPanel({
       setMessages(nextMessages);
       saveChatHistory(projectId, nextMessages);
       setInputText('');
-      s.setSpec((old) => ({ ...old, prompt: text }));
-      setBusyMessage('乌萨奇正在启动造物管线解算 3D 模型…');
+      setBusyMessage('乌萨奇正在结合上下文梳理造物设想…');
+
+      const history = extractHistoryForIdea(messages);
 
       try {
-        const ok = await s.generate();
-        if (ok) {
-          setMode('tune');
+        const organized = await s.organizeIdea(text, history);
+        if (organized) {
+          const aiOrganizeMsg: ChatMessage = {
+            id: `ai-org-${Date.now()}`,
+            sender: 'assistant',
+            type: 'organize',
+            timestamp: Date.now(),
+            organize: {
+              prompt: organized.prompt,
+              template: organized.template,
+              height_mm: organized.height_mm,
+              width_mm: organized.width_mm,
+              depth_mm: organized.depth_mm,
+              thickness_mm: organized.thickness_mm,
+              base: organized.base,
+              hole: organized.hole,
+              assumptions: organized.assumptions || [],
+              specSnapshot: JSON.stringify(organized),
+            },
+          };
+
+          setMessages((cur) => {
+            const updated = [...cur, aiOrganizeMsg];
+            saveChatHistory(projectId, updated);
+            return updated;
+          });
         }
       } finally {
         setBusyMessage('');
@@ -309,26 +343,27 @@ export function IdeaPanel({
       return;
     }
 
-    // 1. 发送用户整理请求消息
+    const userMsgContent = query || '根据所选照片推断几何特征';
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
       sender: 'user',
       type: 'text',
       mode: 'prompt',
-      content: `请帮我智能整理这个造物想法：${query || '根据所选照片推断几何特征'}`,
+      content: userMsgContent,
       timestamp: Date.now(),
     };
 
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     saveChatHistory(projectId, nextMessages);
-    setBusyMessage('乌萨奇正在提取尺寸并整理物理特征…');
+    setInputText('');
+    setBusyMessage('乌萨奇正在结合上下文梳理造物设想…');
+
+    const history = extractHistoryForIdea(messages);
 
     try {
-      // 2. 调用后端进行推测解析
-      const organized = await s.organizeIdea(query);
+      const organized = await s.organizeIdea(query, history);
       if (organized) {
-        // 3. 将 AI 智能整理建议卡片送入聊天流
         const aiOrganizeMsg: ChatMessage = {
           id: `ai-org-${Date.now()}`,
           sender: 'assistant',
@@ -338,10 +373,13 @@ export function IdeaPanel({
             prompt: organized.prompt,
             template: organized.template,
             height_mm: organized.height_mm,
+            width_mm: organized.width_mm,
+            depth_mm: organized.depth_mm,
             thickness_mm: organized.thickness_mm,
             base: organized.base,
             hole: organized.hole,
             assumptions: organized.assumptions || [],
+            specSnapshot: JSON.stringify(organized),
           },
         };
 
@@ -350,7 +388,6 @@ export function IdeaPanel({
           saveChatHistory(projectId, updated);
           return updated;
         });
-        setInputText('');
       }
     } finally {
       setBusyMessage('');
@@ -358,11 +395,26 @@ export function IdeaPanel({
   };
 
   // 确认智能整理建议，直接启动造物管线
-  const handleConfirmOrganize = async (_org: OrganizeData) => {
+  const handleConfirmOrganize = async (org: OrganizeData) => {
     if (s.busy || s.running) return;
+    const requestSpec = org.specSnapshot ? JSON.parse(org.specSnapshot) : {
+      ...s.spec,
+      prompt: org.prompt || s.spec.prompt,
+      template: org.template || s.spec.template,
+      height_mm: org.height_mm ?? s.spec.height_mm,
+      width_mm: org.width_mm ?? s.spec.width_mm,
+      depth_mm: org.depth_mm ?? s.spec.depth_mm,
+      thickness_mm: org.thickness_mm ?? s.spec.thickness_mm,
+      base: org.base ?? s.spec.base,
+      hole: org.hole ?? s.spec.hole,
+      assumptions: org.assumptions || s.spec.assumptions,
+      modeling_plan: null,
+      reconstruction_plan: null,
+    };
+    s.setSpec(requestSpec);
     setBusyMessage('乌萨奇正在启动造物管线解算 3D 模型…');
     try {
-      const ok = await s.generate();
+      const ok = await s.generate(undefined, requestSpec);
       if (ok) {
         setMode('tune');
       }
@@ -390,6 +442,7 @@ export function IdeaPanel({
         {
           schema_version: 1,
           instruction: proposal.instruction,
+          target_part_id: proposal.targetPartId,
           location_asset_id: proposal.locationAssetId,
           location_point: proposal.locationPointSnapshot
             ? JSON.parse(proposal.locationPointSnapshot)
@@ -573,13 +626,14 @@ export function IdeaPanel({
 
       {/* 4. 底部 AI 输入坞 */}
       <ChatInputDock
-        mode={!hasModel ? 'prompt' : mode}
+        mode={canTune ? mode : 'prompt'}
         onModeChange={(m) => setMode(m)}
         text={inputText}
         onTextChange={setInputText}
         onSubmit={handleSubmit}
         isBusy={s.busy || s.running}
         canTune={canTune}
+        tuningSuggestions={tuningSuggestions}
         cloudReady={cloudReady}
         hasModel={hasModel}
         selectedPartId={selectedPartId}
@@ -602,10 +656,48 @@ function createInitialWelcome(hasModel: boolean): ChatMessage {
     sender: 'assistant',
     type: 'welcome',
     content: hasModel
-      ? '呀哈！我是乌萨奇。当前 3D 实体模型已就绪。你可以在中间造物桌旋转观察，想调整哪里直接点选模型并告诉我（如：“让耳朵再长一点”），我来帮你规划几何方案！'
+      ? '呀哈！我是乌萨奇。当前 3D 模型可以预览，造型审阅结果显示在造物桌上。旋转检查作品后，点选要修改的部件并描述具体要求，我来规划调整方案。'
       : '呀哈！我是乌萨奇。别动脑，喊出你的想法 — 比如“做一个 80mm 高的乌萨奇手办印章”，或者上传实物参考照片，剩下的交给我！',
     timestamp: Date.now(),
   };
+}
+
+function extractHistoryForIdea(
+  messages: ChatMessage[],
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  for (const msg of messages) {
+    if (msg.sender === 'user' && msg.content) {
+      let cleanText = msg.content.trim();
+      const prefix = '请帮我智能整理这个造物想法：';
+      if (cleanText.startsWith(prefix)) {
+        cleanText = cleanText.slice(prefix.length).trim();
+      }
+      if (cleanText) {
+        history.push({ role: 'user', content: cleanText });
+      }
+    } else if (msg.sender === 'assistant') {
+      if (msg.type === 'organize' && msg.organize) {
+        const org = msg.organize;
+        const details: string[] = [];
+        if (org.prompt) details.push(`造物主题：${org.prompt}`);
+        if (org.template) details.push(`类型：${org.template}`);
+        if (org.height_mm) details.push(`高度：${org.height_mm}mm`);
+        if (org.thickness_mm) details.push(`厚度：${org.thickness_mm}mm`);
+        if (org.base !== undefined) details.push(`底座：${org.base ? '包含底座' : '无底座'}`);
+        if (org.hole !== undefined) details.push(`穿孔：${org.hole ? '打孔' : '无'}`);
+        if (org.assumptions && org.assumptions.length > 0) {
+          details.push(`推测与假设：${org.assumptions.join('；')}`);
+        }
+        if (details.length > 0) {
+          history.push({ role: 'assistant', content: details.join('，') });
+        }
+      } else if (msg.type === 'text' && msg.content) {
+        history.push({ role: 'assistant', content: msg.content.trim() });
+      }
+    }
+  }
+  return history.slice(-10);
 }
 
 interface SpeechLike {

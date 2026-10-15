@@ -15,6 +15,8 @@ export interface GeometryStep {
   operation: 'add' | 'subtract' | 'intersect';
   shape:
     | 'box'
+    | 'rounded_box'
+    | 'text'
     | 'cylinder'
     | 'ellipsoid'
     | 'star'
@@ -27,6 +29,7 @@ export interface GeometryStep {
     | 'usagi';
   size_mm: [Scalar, Scalar, Scalar] | null;
   coordinate_origin?: 'bounds_center' | 'local_origin';
+  relative_to?: string | null;
   center_mm: [Scalar, Scalar, Scalar];
   rotation_deg: [Scalar, Scalar, Scalar];
   points: [Scalar, Scalar][];
@@ -48,6 +51,8 @@ export interface GeometryStep {
   wall_mm: Scalar;
   bottom_mm: Scalar;
   bevel_mm: Scalar;
+  corner_radius_mm?: Scalar;
+  text?: string;
 }
 export interface Measurement {
   feature: string;
@@ -58,7 +63,7 @@ export interface Measurement {
   status: 'pass' | 'fail' | 'unverified';
 }
 export interface GeometryPlan {
-  schema_version: 2 | 3 | 4;
+  schema_version: 2 | 3 | 4 | 5 | 6;
   title: string;
   source_prompt: string;
   source_asset_ids: string[];
@@ -106,6 +111,7 @@ export interface ReconstructionQuality {
   input_views: number;
   registered_views: number;
   sparse_points: number;
+  dense_points?: number;
   mean_reprojection_error_px: number;
   unregistered_asset_ids: string[];
   registered_asset_ids?: string[];
@@ -155,6 +161,16 @@ export interface Model {
   comparison_id?: string;
   reference_id?: string;
   reconstruction?: ReconstructionQuality;
+  design_review?: {
+    schema_version: 'yaha.design-review/v1';
+    status: 'accepted' | 'draft_retained';
+    scope: 'design_intent';
+    message: string;
+    findings?: Record<'identity' | 'features' | 'lettering' | 'adjustment' | 'preservation', {
+      status: 'pass' | 'revise' | 'unverified';
+      observation: string;
+    }>;
+  };
   photo_fidelity?: {
     schema_version: 'yaha.photo-fidelity/v1';
     appearance_status?: 'accepted' | 'unverified';
@@ -235,6 +251,7 @@ export interface Asset {
 export interface ModelAdjustment {
   schema_version: 1;
   instruction: string;
+  target_part_id?: string;
   location_asset_id?: string;
   location_point?: [number, number];
 }

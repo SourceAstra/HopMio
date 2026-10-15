@@ -8,6 +8,7 @@ export interface ProposalData {
   revision: string;
   specSnapshot: string;
   selectionSnapshot: string;
+  targetPartId?: string;
   locationAssetId?: string;
   locationPointSnapshot?: string;
   applied?: boolean;
@@ -27,10 +28,13 @@ export interface OrganizeData {
   prompt: string;
   template: string;
   height_mm?: number;
+  width_mm?: number;
+  depth_mm?: number;
   thickness_mm?: number;
   base?: boolean;
   hole?: boolean;
   assumptions: string[];
+  specSnapshot?: string;
   applied?: boolean;
 }
 

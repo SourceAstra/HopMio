@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { Camera, Cpu, Layers, Scissors, CheckCircle2, Check, Sparkles } from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
 import { isPhotoMode } from '../../theme/modes';
+import { isModelDraft } from '../modeling/quality';
 
 interface PipelineEnergyRailProps {
   activeStage?: number | null;
@@ -18,7 +19,7 @@ export function PipelineEnergyRail({
   const isPhoto = isPhotoMode(s.spec.mode);
   const hasModel = !!model;
   const stageAComplete = hasModel && (!!model.reconstruction || !!model.source_glb_id);
-  const stageBComplete = hasModel && !s.dirty;
+  const stageBComplete = hasModel && !s.dirty && !isModelDraft(model);
 
   // 1. 精确推导当前运行/就绪的步骤序号 (1 ~ 5)
   let activeStep = 1;
@@ -115,7 +116,7 @@ export function PipelineEnergyRail({
     } else if (model?.source_glb_id) {
       step3Status = '物理扫描高密裸网格就绪';
     } else {
-      step3Status = '几何表面起伏已映射对齐';
+      step3Status = '参数几何 · 无摄影测量扫描';
     }
   }
 
@@ -127,22 +128,22 @@ export function PipelineEnergyRail({
     step4Status = s.job?.message || 'Blender 正在切平定标与水密闭合…';
   } else if (step4Passed) {
     step4Status = model?.size_mm
-      ? `Bed Cut 已水平切平 · ${model.size_mm.map((v) => Math.round(v)).join('×')}mm`
-      : 'Bed Cut 已水平切平 · 100% 流形水密';
+      ? `制造网格已生成 · ${model.size_mm.map((v) => Math.round(v)).join('×')}mm`
+      : '制造网格已生成';
   } else if (hasModel && s.dirty) {
     step4Status = '参数已变动 · 待重新切平定标';
   }
 
   // 阶段 5：3D 打印就绪
-  const step5Passed = stageBComplete && !s.dirty;
+  const step5Passed = stageBComplete && !!s.project?.validation?.can_prepare;
   const step5Running = s.running && activeStep === 5;
   let step5Status = '待制造体检与成型复测';
   if (step5Running) {
     step5Status = s.job?.message || '正在切片生成 A1 mini 打印代码…';
   } else if (step5Passed) {
     step5Status = model?.faces
-      ? `${model.faces.toLocaleString()} 水密面 · 制造就绪`
-      : '100% 流形水密 · 打印就绪';
+      ? `${model.faces.toLocaleString()} 面 · 制造体检通过`
+      : '制造体检通过';
   }
 
   const stages = [

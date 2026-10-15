@@ -4,6 +4,8 @@ import { hasCurrentPlan } from './plan';
 
 const shapeNames = {
   box: '方块',
+  rounded_box: '精确圆角板',
+  text: '真实文字实体',
   cylinder: '圆柱',
   ellipsoid: '椭球',
   star: '五角星',

@@ -49,6 +49,7 @@ export function AiAdjustment() {
               s.running ||
               !available ||
               !hasModel ||
+              !s.preferences?.chat_supports_images ||
               !instruction.trim() ||
               !s.preferences?.blender?.available
             }
@@ -64,7 +65,7 @@ export function AiAdjustment() {
         </button>
       )}
       {available && !s.preferences?.chat_supports_images && (
-        <small>当前 AI 仅支持文字，将依据现有参数方案调整。</small>
+        <small>当前模型不支持图片输入，无法核对微调前后的实际造型；请选择支持图片的模型。</small>
       )}
       {locked.length > 0 && (
         <small>

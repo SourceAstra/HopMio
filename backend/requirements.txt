@@ -12,3 +12,4 @@ scipy>=1.15,<2
 networkx>=3.4,<4
 lxml>=5.3,<7
 pycolmap==4.2.1
+fonttools>=4.66.1,<5

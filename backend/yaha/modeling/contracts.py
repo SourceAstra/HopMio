@@ -1,4 +1,4 @@
-"""建模计划 v3：保留精确实体工具，增加可编辑的自由曲面。"""
+"""建模计划 v6：精确实体、自由曲面、文字与部件相对坐标。"""
 
 from typing import Annotated, Literal, Union
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -71,8 +71,9 @@ class GeometryStep(Contract):
     id: Identifier
     name: str = Field(min_length=1, max_length=60)
     operation: Literal["add", "subtract", "intersect"] = "add"
-    shape: Literal["box", "cylinder", "ellipsoid", "star", "polygon", "revolve", "loft", "sweep", "cushion", "cup", "usagi"] = Field(description="usagi 导入完整、已融合的角色网格，内含头、身体、耳朵、左右手臂、脚和表情，不是无四肢的素体。内置部位不能通过删除独立步骤移除；需先用局部 subtract 工具切除目标几何，再按需添加替换部件，保持其他区域不变。其他 shape 为单独几何工具。")
+    shape: Literal["box", "rounded_box", "text", "cylinder", "ellipsoid", "star", "polygon", "revolve", "loft", "sweep", "cushion", "cup", "usagi"] = Field(description="usagi 导入完整、已融合的角色网格，内含头、身体、耳朵、左右手臂、脚和表情，不是无四肢的素体。内置部位不能通过删除独立步骤移除；需先用局部 subtract 工具切除目标几何，再按需添加替换部件，保持其他区域不变。rounded_box 是 XY 平面精确圆角矩形沿 Z 挤出；text 是 text 字段的真实字体轮廓沿 Z 挤出，XY 在 size_mm 范围内等比适配，Z 是精确挤出厚度。其他 shape 为单独几何工具。")
     coordinate_origin: Literal["bounds_center", "local_origin"] = Field(description="bounds_center：原始包围盒中心归零后旋转并平移；local_origin：保留原始局部坐标，旋转后平移。")
+    relative_to: Identifier | None = Field(default=None, description="可选父部件 id，必须引用更早的步骤；center_mm 与 rotation_deg 在父部件局部坐标中定义，执行器组合完整刚体变换，禁止手动叠加欧拉角。")
     size_mm: tuple[Scalar, Scalar, Scalar] | None = None
     center_mm: tuple[Scalar, Scalar, Scalar] = (0, 0, 0)
     rotation_deg: tuple[Scalar, Scalar, Scalar] = (0, 0, 0)
@@ -84,9 +85,17 @@ class GeometryStep(Contract):
     wall_mm: Scalar = 3
     bottom_mm: Scalar = 4
     bevel_mm: Scalar = 0
+    corner_radius_mm: Scalar = 0
+    text: str = Field(default="", max_length=80)
 
     @model_validator(mode="after")
     def profile(self):
+        if (self.shape == "text") != bool(self.text.strip()):
+            raise ValueError("文字工具必须提供真实文字；其他工具不接收 text")
+        if any(ord(char) < 32 for char in self.text):
+            raise ValueError("文字工具只接受单行可打印文字")
+        if self.shape != "rounded_box" and self.corner_radius_mm != 0:
+            raise ValueError("corner_radius_mm 只用于精确圆角矩形")
         if self.coordinate_origin == "local_origin" and self.shape not in ("loft", "sweep", "revolve"):
             raise ValueError("只有放样、扫掠与旋转轮廓支持 local_origin；其他工具使用 bounds_center")
         if (self.shape == "sweep") != (self.size_mm is None):
@@ -109,7 +118,7 @@ class Constraint(Contract):
 
 
 class GeometryPlan(Contract):
-    schema_version: Literal[3, 4] = 4
+    schema_version: Literal[3, 4, 5, 6] = 6
     title: str = Field(min_length=1, max_length=80)
     source_prompt: str = Field(default="", max_length=3000)
     source_asset_ids: list[str] = Field(default_factory=list, max_length=96)

@@ -927,7 +927,7 @@
     gap: 8px;
   }
   .desk-companion {
-    width: 100%;
+    width: auto;
   }
   .project-label {
     min-width: 0;
@@ -1024,6 +1024,67 @@
   animation: stageDrawerSlideIn 0.26s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@media (max-width: 850px) {
+  .workbench-grid.full-height,
+  .workbench-grid.full-height.with-stage-drawer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: max-content;
+    overflow-y: auto;
+  }
+  .model-panel-heading {
+    position: relative;
+    inset: auto;
+    margin: 12px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .model-panel-heading .surface-view-tabs,
+  .model-panel-heading-meta {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .model-panel-heading-meta {
+    margin-left: 0;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .model-panel-heading .pill {
+    white-space: nowrap;
+  }
+  .model-panel .pipeline-metrics-dashboard {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .model-panel .metric-chip {
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .model-panel .chip-stl-download,
+  .model-panel .chip-checkup-action {
+    justify-content: center;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .workbench-grid.full-height > .model-panel {
+    grid-row: 1;
+    height: clamp(380px, 65dvh, 560px);
+    max-height: none;
+  }
+  .workbench-grid.full-height > .idea-panel.ai-chat-panel {
+    height: clamp(420px, 65dvh, 600px) !important;
+    max-height: none !important;
+  }
+  .workbench-grid.full-height > .adjust-stack {
+    grid-column: 1;
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
 @keyframes stageDrawerSlideIn {
   from {
     opacity: 0;
@@ -1043,6 +1104,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.model-viewport-area > .viewer {
+  min-height: 0;
 }
 
 /* 位置 2：中栏底座内嵌进度与尺寸融合条 */
