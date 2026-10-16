@@ -163,8 +163,9 @@ export interface Model {
   reconstruction?: ReconstructionQuality;
   design_review?: {
     schema_version: 'yaha.design-review/v1';
-    status: 'accepted' | 'draft_retained';
-    scope: 'design_intent';
+    status: 'accepted' | 'draft_retained' | 'geometry_verified';
+    scope: 'design_intent' | 'geometry_only';
+    visual_status?: 'unverified';
     message: string;
     findings?: Record<'identity' | 'features' | 'lettering' | 'adjustment' | 'preservation', {
       status: 'pass' | 'revise' | 'unverified';
@@ -256,6 +257,7 @@ export interface ModelAdjustment {
   location_point?: [number, number];
 }
 export interface Job {
+  error_code?: string;
   id: string;
   project_id: string;
   kind: string;
@@ -324,6 +326,11 @@ export interface SliceReport {
   physical_printed: false;
 }
 export interface AIModelItem {
+  context_window_tokens?: number;
+  max_input_tokens?: number;
+  max_tokens?: number;
+  timeout_seconds?: number;
+  reasoning_effort?: 'low' | 'medium' | 'high' | 'max' | null;
   id: string;
   name: string;
   model: string;

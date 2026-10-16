@@ -1,8 +1,9 @@
-import { Download, ExternalLink } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
 import { call, download } from '../../api/client';
 import type { Asset } from '../../types';
 import { SlicePanel } from './SlicePanel';
+import { StudioLaunchButton } from './StudioLaunchButton';
 export function ExportButtons() {
   const s = useStudio();
   const exportFile = (format: string) =>
@@ -18,19 +19,6 @@ export function ExportButtons() {
               ? '.manufacturing.glb'
               : '.' + format),
       );
-    });
-  const handoff = () =>
-    s.act(async () => {
-      if (!s.project) return;
-      const asset = await call<Asset>('project.export', { id: s.project.id, format: '3mf' });
-      if (window.yaha) {
-        const result = await window.yaha.openStudio(asset.id);
-        if (result.handed_off)
-          s.setNotice('模型已交给 Bambu Studio，请选择机型、材料并检查实际切片。');
-      } else {
-        await download(asset.id, s.project.name + '.3mf');
-        s.setNotice('3MF 已下载，请在 Bambu Studio 中打开。');
-      }
     });
   return (
     <>
@@ -61,13 +49,7 @@ export function ExportButtons() {
           </button>
         ))}
       </div>
-      <button
-        className="secondary"
-        disabled={s.busy || s.running || !s.canPrepare}
-        onClick={() => void handoff()}
-      >
-        <ExternalLink size={18} /> 交给 Bambu Studio
-      </button>
+      <StudioLaunchButton includeModel />
     </>
   );
 }

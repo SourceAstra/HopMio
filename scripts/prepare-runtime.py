@@ -5,6 +5,9 @@ import sys
 from pathlib import Path
 
 destination = Path(sys.argv[1]).resolve()
+artifact_root = Path(__file__).resolve().parents[1] / ".artifacts"
+if destination == artifact_root.resolve() or not destination.is_relative_to(artifact_root.resolve()):
+    raise SystemExit("Python staging must be inside this project's .artifacts directory.")
 base = Path(sys.base_prefix).resolve()
 venv = Path(sys.prefix).resolve()
 if os.name != "nt" or sys.maxsize <= 2**32:
@@ -26,7 +29,7 @@ for item in base.iterdir():
 for directory in ("Lib", "DLLs"):
     source = base / directory
     if source.exists():
-        shutil.copytree(source, destination / directory, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        shutil.copytree(source, destination / directory, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "site-packages"))
 site_packages = venv / "Lib" / "site-packages"
 if not site_packages.is_dir():
     raise SystemExit("The Windows virtual environment has no Lib/site-packages.")

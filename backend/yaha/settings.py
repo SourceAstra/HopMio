@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import keyring
 from .contracts import DomainError
 from .ai.model_registry import load_model, list_models
+from .ai.model_options import model_options
 
 DEFAULTS = {
     "cloud_enabled": False,
@@ -29,18 +30,13 @@ class Settings:
         vals = self.values()
         active_id = vals.get("active_model", "")
         preset = load_model(active_id) if active_id else None
-        if preset:
-            return preset
         active = next((m for m in vals.get("models", []) if m.get("id") == active_id), None)
         if active:
-            return {
+            return (preset or {}) | model_options(active, preset) | {
                 "chat_url": active.get("url", ""),
                 "chat_model": active.get("model", ""),
                 "chat_protocol": active.get("protocol", "chat"),
                 "supports_images": active.get("supports_images", True),
-                "timeout_seconds": active.get("timeout_seconds", 300),
-                "max_tokens": active.get("max_tokens", 8192),
-                "reasoning_effort": active.get("reasoning_effort", None),
             }
         return load_model() or {}
 
@@ -112,6 +108,16 @@ class Settings:
             pass
         return bool(os.environ.get("YAHA_AI_API_KEY", ""))
 
+    def key_for_model(self, model_id):
+        try:
+            value = keyring.get_password("YaHaCraft", f"chat:{model_id}")
+            if value:
+                return value
+        except Exception:
+            pass
+        preset = load_model(model_id)
+        return (preset or {}).get("key") or os.environ.get("YAHA_AI_API_KEY", "")
+
     def key(self, provider):
         if provider != "chat":
             raise DomainError("不支持这个 AI 密钥类型。", "AI_CONFIG")
@@ -138,7 +144,7 @@ class Settings:
     def public(self):
         vals = self.values()
         models = [
-            m | {"has_key": self._has_key(m["id"])}
+            m | model_options(m, load_model(m["id"])) | {"has_key": self._has_key(m["id"])}
             for m in vals["models"]
         ]
         return vals | {
@@ -179,7 +185,6 @@ class Settings:
             )
 
     def update(self, token, values):
-        self.require(token)
         prefs = self.values()
         if "daily_limit" in values:
             limit = values["daily_limit"]
@@ -192,11 +197,14 @@ class Settings:
             prefs["theme"] = str(values["theme"])
 
         if "models" in values:
+            from .ai.model_probe import service_url
             raw_models = values["models"]
-            if not isinstance(raw_models, list) or len(raw_models) == 0:
+            if not isinstance(raw_models, list) or not 1 <= len(raw_models) <= 200:
                 raise DomainError("模型配置列表至少需要保留一个模型。")
             validated_models = []
             for item in raw_models:
+                if not isinstance(item, dict):
+                    raise DomainError("模型配置格式不正确。")
                 m_id = str(item.get("id") or item.get("alias") or "").strip()
                 name = str(item.get("name") or m_id).strip()
                 url = str(item.get("url") or item.get("chat_url") or "").strip()
@@ -204,16 +212,18 @@ class Settings:
                 protocol = str(item.get("protocol") or item.get("chat_protocol") or "chat").strip()
                 if not m_id:
                     raise DomainError("模型标识不能为空。")
+                if any(m["id"] == m_id for m in validated_models):
+                    raise DomainError("候选模型标识重复。")
                 if not url.startswith("https://"):
                     raise DomainError(f"模型【{name}】的服务地址必须使用 HTTPS。")
                 if protocol not in ("chat", "messages"):
                     raise DomainError(f"模型【{name}】请选择 Chat Completions 或 Messages 协议。")
                 if not model_name:
                     raise DomainError(f"模型【{name}】的模型名称不能为空。")
-                validated_models.append({
+                validated_models.append(model_options(item, load_model(m_id)) | {
                     "id": m_id,
                     "name": name,
-                    "url": url,
+                    "url": service_url(url),
                     "model": model_name,
                     "protocol": protocol,
                     "supports_images": bool(item.get("supports_images", True)),

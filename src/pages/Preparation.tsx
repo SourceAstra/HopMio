@@ -3,6 +3,7 @@ import { CottageRoomHeading } from '../components/CottageRoomHeading';
 import { ExportButtons } from '../features/printing/ExportButtons';
 import { call } from '../api/client';
 import type { Profile } from '../types';
+import { StudioLaunchButton } from '../features/printing/StudioLaunchButton';
 export function Preparation() {
   const s = useStudio();
   const update = (p: Partial<Profile>) => s.setProfile((old) => ({ ...old, ...p }));
@@ -11,6 +12,7 @@ export function Preparation() {
       <CottageRoomHeading
         room="prepare"
         description="选择实际喷嘴与材料，生成本地切片，再和家长检查打印预览。"
+        actions={<StudioLaunchButton />}
       />
       <div className="two-columns">
         <section className="panel form-panel">

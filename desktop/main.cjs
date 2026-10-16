@@ -6,9 +6,12 @@ const { pathToFileURL } = require('node:url');
 const readline = require('node:readline');
 
 const methods = new Set([
+  'studio.open',
+  'conversation.get', 'conversation.save',
+  'settings.models.discover', 'settings.models.test',
   'bootstrap', 'project.create', 'project.get', 'project.list', 'project.history',
   'project.restore', 'project.update', 'project.export', 'asset.upload', 'asset.list',
-  'idea.interpret', 'idea.adjustment', 'model.generate', 'model.adjust', 'model.plan',
+  'idea.interpret', 'idea.adjustment', 'idea.converse', 'model.generate', 'model.adjust', 'model.plan',
   'model.check', 'model.slice', 'job.get', 'job.cancel', 'job.list', 'profile.save',
   'settings.get', 'settings.unlock', 'settings.update', 'workshop.templates',
   'model.repair', 'project.import',
@@ -81,24 +84,7 @@ function callEngine(method, params = {}) {
 }
 
 async function openStudio(assetId) {
-  const asset = await callEngine('asset.path', { id: assetId });
-  const candidates = [
-    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Bambu Studio', 'bambu-studio.exe'),
-    path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Bambu Studio', 'bambu-studio.exe'),
-  ].filter(Boolean);
-  let executable;
-  for (const candidate of candidates) {
-    try { await fs.access(candidate); executable = candidate; break; } catch {}
-  }
-  if (!executable) {
-    const picked = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Bambu Studio', extensions: ['exe'] }] });
-    if (picked.canceled || !picked.filePaths[0]) return { canceled: true };
-    executable = picked.filePaths[0];
-  }
-  if (path.basename(executable).toLowerCase() !== 'bambu-studio.exe') throw new Error('请选择 Bambu Studio 程序。');
-  const child = spawn(executable, [asset.path], { detached: true, stdio: 'ignore', windowsHide: false });
-  child.unref();
-  return { handed_off: true };
+  return callEngine('studio.open', { asset_id: assetId });
 }
 
 async function saveAsset(assetId) {

@@ -1,25 +1,13 @@
 import { useRef, type KeyboardEvent } from 'react';
-import {
-  Sparkles,
-  Mic,
-  ImagePlus,
-  Wand2,
-  Send,
-  X,
-  MapPin,
-} from 'lucide-react';
+import { Mic, ImagePlus, Send, X, MapPin } from 'lucide-react';
 import { assetUrl } from '../../../api/client';
 import type { Asset } from '../../../types';
 
 interface ChatInputDockProps {
-  mode: 'tune' | 'prompt';
-  onModeChange: (mode: 'tune' | 'prompt') => void;
   text: string;
   onTextChange: (text: string) => void;
   onSubmit: () => void;
   isBusy: boolean;
-  canTune: boolean;
-  cloudReady: boolean;
   hasModel: boolean;
   selectedPartId?: string | null;
   selectedPointMm?: [number, number, number] | null;
@@ -28,20 +16,14 @@ interface ChatInputDockProps {
   onLocationImageChange: (asset: Asset | null) => void;
   onLocationPointChange: (point: [number, number] | null) => void;
   onVoiceInput: () => void;
-  onOrganizeIdea?: () => void;
-  hasPhotos: boolean;
   tuningSuggestions?: Array<{ label: string; value: string }>;
 }
 
 export function ChatInputDock({
-  mode,
-  onModeChange,
   text,
   onTextChange,
   onSubmit,
   isBusy,
-  canTune,
-  cloudReady,
   hasModel,
   selectedPartId,
   selectedPointMm,
@@ -50,15 +32,13 @@ export function ChatInputDock({
   onLocationImageChange,
   onLocationPointChange,
   onVoiceInput,
-  onOrganizeIdea,
-  hasPhotos,
   tuningSuggestions,
 }: ChatInputDockProps) {
   const locationInputRef = useRef<HTMLInputElement>(null);
 
   const quickChips =
-    mode === 'tune'
-      ? tuningSuggestions || []
+    hasModel && tuningSuggestions?.length
+      ? tuningSuggestions
       : [
           { label: '🥕 胡萝卜印章', value: '乌萨奇同款胡萝卜手办印章，底部平整带抓握手柄' },
           { label: '✦ 80mm 元气立牌', value: '乌萨奇开心招手元气立牌，高80mm自带稳固底座' },
@@ -75,12 +55,11 @@ export function ChatInputDock({
     }
   };
 
-  const placeholder =
-    mode === 'tune'
-      ? selectedPointMm
-        ? '已选定 3D 表面红点处。描述你想怎么调整（按 Enter 发送）…'
-        : '点选 3D 模型表面局部，输入调整想法（按 Enter 发送）…'
-      : '喊出你的造物想法，或描述外貌、尺寸（按 Enter 发送）…';
+  const placeholder = selectedPointMm
+    ? '已选定模型位置，直接说说想怎么改，也可以聊新的想法…'
+    : hasModel
+      ? '继续聊这个作品：加文字、改尺寸，或重新设计（Enter 发送）…'
+      : '喊出你的造物想法，或描述外貌、尺寸（Enter 发送）…';
 
   return (
     <div className="chat-input-dock">
@@ -121,41 +100,10 @@ export function ChatInputDock({
         ))}
       </div>
 
-      {/* 模式感知切换条（仅在已有模型时可切换微调与整体重构） */}
-      {hasModel && (
-        <div className="dock-mode-selector">
-          <button
-            type="button"
-            className={`mode-select-tab ${mode === 'tune' ? 'active' : ''}`}
-            disabled={isBusy || !canTune}
-            title={canTune ? '修改当前模型的局部细节' : '当前模型或 AI 服务暂不支持局部微调'}
-            onClick={() => onModeChange('tune')}
-          >
-            <Wand2 size={12} />
-            <span>✨ 细节微调</span>
-            <span className="mode-dot" />
-          </button>
-          <button
-            type="button"
-            className={`mode-select-tab ${mode === 'prompt' ? 'active' : ''}`}
-            onClick={() => onModeChange('prompt')}
-          >
-            <Sparkles size={12} />
-            <span>✦ 整体灵感</span>
-          </button>
-        </div>
-      )}
-
-      {hasModel && !canTune && (
-        <small className="tune-howto">
-          当前模型或 AI 服务暂不支持局部微调。整体灵感会规划新造型，旧版本会保留。
-        </small>
-      )}
-
       {/* 统一输入框卡片 */}
       <div className="dock-input-box">
         {/* 模型已选局部坐标或标记提示条 */}
-        {(selectedPointMm || selectedPartId) && mode === 'tune' && (
+        {(selectedPointMm || selectedPartId) && (
           <div className="dock-selection-badge">
             <MapPin size={11} className="badge-pin-icon" />
             <span>
@@ -190,7 +138,11 @@ export function ChatInputDock({
               )}
             </div>
             <div className="location-info">
-              <span>{locationPoint ? `已标记点 (${locationPoint[0]}%, ${locationPoint[1]}%)` : '点击图片放置定位标记'}</span>
+              <span>
+                {locationPoint
+                  ? `已标记点 (${locationPoint[0]}%, ${locationPoint[1]}%)`
+                  : '点击图片放置定位标记'}
+              </span>
               <button
                 type="button"
                 className="location-remove-btn"
@@ -207,12 +159,13 @@ export function ChatInputDock({
 
         <textarea
           className="dock-textarea"
-          aria-label={mode === 'tune' ? '微调想法' : '造物灵感'}
+          aria-label="造物对话"
           placeholder={placeholder}
           value={text}
           disabled={isBusy}
           onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          maxLength={2000}
           rows={2}
         />
 
@@ -229,29 +182,15 @@ export function ChatInputDock({
               <Mic size={14} />
             </button>
 
-            {mode === 'tune' && (
-              <button
-                type="button"
-                className="tool-btn"
-                title="上传圈注位置截图"
-                disabled={isBusy}
-                onClick={() => locationInputRef.current?.click()}
-              >
-                <ImagePlus size={14} />
-              </button>
-            )}
-
-            {mode === 'prompt' && onOrganizeIdea && (
-              <button
-                type="button"
-                className="tool-organize-btn"
-                disabled={isBusy || (!text.trim() && !hasPhotos)}
-                title="由 AI 智能整理文字和照片中的尺寸与要求"
-                onClick={onOrganizeIdea}
-              >
-                <Sparkles size={12} /> 智能整理
-              </button>
-            )}
+            <button
+              type="button"
+              className="tool-btn"
+              title="上传圈注位置截图"
+              disabled={isBusy}
+              onClick={() => locationInputRef.current?.click()}
+            >
+              <ImagePlus size={14} />
+            </button>
 
             {text && (
               <button
@@ -270,21 +209,16 @@ export function ChatInputDock({
             <button
               type="button"
               className="dock-send-btn"
-              disabled={isBusy || !text.trim() || (mode === 'tune' && (!canTune || !cloudReady))}
+              disabled={isBusy || !text.trim()}
               onClick={onSubmit}
-              title={mode === 'tune' ? '发送微调想法，由乌萨奇生成建议' : '发送创意想法，由乌萨奇智能整理'}
+              title="继续与乌萨奇讨论这个作品"
             >
               {isBusy ? (
                 <span className="btn-loading-spinner" />
-              ) : mode === 'tune' ? (
-                <>
-                  <Wand2 size={13} />
-                  <span>整理建议</span>
-                </>
               ) : (
                 <>
-                  <Sparkles size={13} />
-                  <span>整理想法</span>
+                  <Send size={13} />
+                  <span>发送</span>
                 </>
               )}
             </button>

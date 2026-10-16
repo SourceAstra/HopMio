@@ -116,6 +116,7 @@ class Projects:
         with self.db.transaction() as conn:
             conn.execute("DELETE FROM revisions WHERE project_id=?", (identifier,))
             conn.execute("DELETE FROM projects WHERE id=?", (identifier,))
+            conn.execute("DELETE FROM settings WHERE key=?", ("project_conversation:" + identifier,))
         return {"id": identifier, "deleted": True}
 
     def delete_revision(self, identifier: str, revision_id: str):

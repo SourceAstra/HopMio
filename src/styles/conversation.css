@@ -1,0 +1,30 @@
+.chat-session-context {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 2px;
+  border-bottom: 1px solid #f0e3c8;
+  color: #9b7a43;
+}
+.chat-session-context strong {
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+}
+.chat-session-context small {
+  font-size: 9px;
+  color: #ac9470;
+}
+.chat-session-error,
+.proposal-retry-hint {
+  font-size: 11px;
+  line-height: 1.7;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #fff2d5;
+  color: #986323;
+}

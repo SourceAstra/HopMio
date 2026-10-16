@@ -86,14 +86,12 @@ def test_images_become_closed_actual_mesh(service, mode):
 
 def test_settings_keys_not_exposed_and_quota(service, monkeypatch):
     monkeypatch.setenv("YAHA_AI_API_KEY", "not-a-real-secret")
-    token = service.settings.unlock("123456")["token"]
-    public = service.settings.update(token, {"cloud_enabled": True, "daily_limit": 1})
+    public = service.settings.update("", {"cloud_enabled": True, "daily_limit": 1})
     assert public["chat_configured"] and "not-a-real-secret" not in str(public)
     service.settings.reserve_cloud("chat")
     with pytest.raises(DomainError):
         service.settings.reserve_cloud("chat")
-    with pytest.raises(DomainError):
-        service.settings.update("bad", {"daily_limit": 2})
+    assert service.settings.update("", {"daily_limit": 2})["daily_limit"] == 2
 
 
 def test_asset_paths_and_disabled_cloud(service):

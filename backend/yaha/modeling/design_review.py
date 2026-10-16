@@ -14,6 +14,16 @@ from .runtime import photo_review_policy
 from ..contracts import DomainError
 
 
+def require_adjustment_acceptance(report):
+    if report["status"] == "accepted" or (report["status"] == "geometry_verified" and report.get("scope") == "geometry_only" and report.get("visual_status") == "unverified"):
+        return
+    errors = [item for item in report.get("evidence", []) if item.get("error_code")]
+    if errors:
+        reason = "审阅服务限流（HTTP 429）" if "429" in report.get("message", "") else "成品审阅暂未完成"
+        raise DomainError(f"微调已完成建模，但{reason}，结果未应用，当前模型保留。可稍后重试这条建议，或更换可用模型后重试。详情：" + report["message"], "AI_ADJUSTMENT_REVIEW_UNAVAILABLE")
+    raise DomainError("微调成品未通过需求与保留区域审阅，当前模型保留。" + report["message"], "AI_ADJUSTMENT_REVIEW")
+
+
 class DesignFinding(Contract):
     status: Literal["pass", "revise", "unverified"]
     observation: str = Field(min_length=8, max_length=400)

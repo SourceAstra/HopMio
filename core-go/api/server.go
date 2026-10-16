@@ -15,44 +15,50 @@ import (
 
 // 公开开放的 RPC 方法白名单（对标 shared/methods.ts）
 var publicMethods = map[string]bool{
-	"bootstrap":          true,
-	"project.create":     true,
-	"project.get":        true,
-	"project.list":       true,
-	"project.history":    true,
-	"project.restore":         true,
-	"project.select_revision": true,
-	"project.update":          true,
-	"project.delete":          true,
-	"project.delete_revision": true,
-	"revision.delete":         true,
-	"project.export":          true,
-	"asset.upload":       true,
-	"asset.delete":       true,
-	"asset.list":         true,
-	"idea.interpret":     true,
-	"idea.adjustment":    true,
-	"model.generate":     true,
-	"model.adjust":       true,
-	"model.plan":         true,
-	"model.check":        true,
-	"model.slice":        true,
-	"job.get":            true,
-	"job.cancel":         true,
-	"job.list":           true,
-	"profile.save":       true,
-	"settings.get":       true,
-	"settings.unlock":    true,
-	"settings.update":    true,
-	"workshop.templates": true,
-	"model.repair":       true,
-	"project.import":     true,
+	"bootstrap":                true,
+	"project.create":           true,
+	"project.get":              true,
+	"project.list":             true,
+	"project.history":          true,
+	"project.restore":          true,
+	"project.select_revision":  true,
+	"project.update":           true,
+	"project.delete":           true,
+	"project.delete_revision":  true,
+	"revision.delete":          true,
+	"project.export":           true,
+	"asset.upload":             true,
+	"asset.delete":             true,
+	"asset.list":               true,
+	"idea.interpret":           true,
+	"idea.adjustment":          true,
+	"idea.converse":            true,
+	"model.generate":           true,
+	"model.adjust":             true,
+	"model.plan":               true,
+	"model.check":              true,
+	"model.slice":              true,
+	"job.get":                  true,
+	"job.cancel":               true,
+	"job.list":                 true,
+	"profile.save":             true,
+	"settings.get":             true,
+	"settings.unlock":          true,
+	"settings.update":          true,
+	"settings.models.discover": true,
+	"settings.models.test":     true,
+	"studio.open":              true,
+	"conversation.get":         true,
+	"conversation.save":        true,
+	"workshop.templates":       true,
+	"model.repair":             true,
+	"project.import":           true,
 }
 
 type Server struct {
-	sup      *daemon.Supervisor
-	webDir   string
-	mux      *http.ServeMux
+	sup    *daemon.Supervisor
+	webDir string
+	mux    *http.ServeMux
 }
 
 func NewServer(sup *daemon.Supervisor, webDir string) *Server {
@@ -117,6 +123,10 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if (req.Method == "studio.open" || req.Method == "settings.update" || req.Method == "settings.models.discover" || req.Method == "settings.models.test") && !localAppRequest(r) {
+		http.Error(w, `{"error":{"message":"请从本机呀哈造物页面执行此操作。"}}`, http.StatusForbidden)
+		return
+	}
 	result, err := s.sup.Call(req.Method, req.Params)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

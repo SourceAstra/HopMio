@@ -1,0 +1,6 @@
+# 输出传输保护；输入预算改为模型设置中的上下文窗口与输入 Token 上限。
+response:
+  event_max_bytes: 1048576
+  # SSE 元数据可能远大于最终文本，按模型 max_tokens 分别计算上限。
+  wire_bytes_per_token: 2048
+  text_characters_per_token: 16

@@ -13,6 +13,7 @@ interface ChatFeedProps {
   onOpenRibbon?: () => void;
   isBusy: boolean;
   busyMessage?: string;
+  reviewAvailable?: boolean;
 }
 
 export function ChatFeed({
@@ -24,6 +25,7 @@ export function ChatFeed({
   onOpenRibbon,
   isBusy,
   busyMessage,
+  reviewAvailable = true,
 }: ChatFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -101,9 +103,7 @@ export function ChatFeed({
             <div key={msg.id} className="chat-message-row user-row">
               <div className="chat-bubble user-bubble">
                 <div className="bubble-header user-header">
-                  <span className="bubble-mode-tag">
-                    {msg.mode === 'tune' ? '✨ 细节微调' : '✦ 整体灵感'}
-                  </span>
+                  <span className="bubble-mode-tag">✦ 造物对话</span>
                   <span className="bubble-time">
                     <Clock size={10} />
                     {new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
@@ -168,19 +168,31 @@ export function ChatFeed({
                     </span>
                   ) : (
                     <span className="proposal-pending-pill">
-                      {['queued', 'running'].includes(p.jobStatus || '')
-                        ? '正在生成'
-                        : p.jobStatus
-                          ? '未应用'
-                          : '待确认'}
+                      {p.superseded
+                        ? '已被后续方案替代'
+                        : ['queued', 'running'].includes(p.jobStatus || '')
+                          ? '正在生成'
+                          : p.jobStatus
+                            ? '未应用'
+                            : '待确认'}
                     </span>
                   )}
                 </div>
 
                 <p className="proposal-summary">{p.summary}</p>
+                {!p.applied && !p.superseded && !reviewAvailable && (
+                  <p className="proposal-retry-hint">
+                    可以直接更新 3D 模型；完成后会检查实际网格与尺寸，请和家长一起旋转模型确认外观。
+                  </p>
+                )}
                 {p.jobStatus && !p.applied && !['queued', 'running'].includes(p.jobStatus) && (
                   <p className="proposal-summary" role="status">
                     {p.jobMessage}
+                  </p>
+                )}
+                {!p.applied && !p.superseded && p.jobMessage?.includes('429') && (
+                  <p className="proposal-retry-hint">
+                    审阅服务暂时限流，当前模型未改变。稍后可重试本建议，无需重新描述；也可更换可用模型。
                   </p>
                 )}
 
@@ -206,11 +218,16 @@ export function ChatFeed({
                     <button
                       type="button"
                       className="proposal-btn-confirm"
-                      disabled={isBusy}
+                      disabled={isBusy || p.superseded}
                       onClick={() => onConfirmProposal(p)}
                       title="确认并立即提交管线生成 3D 模型"
                     >
-                      <Check size={13} /> 确认并更新 3D 模型
+                      <Check size={13} />{' '}
+                      {p.superseded
+                        ? '请确认后续方案'
+                        : ['failed', 'canceled', 'interrupted'].includes(p.jobStatus || '')
+                          ? '重试此微调'
+                          : '确认并更新 3D 模型'}
                     </button>
                   </div>
                 )}
@@ -298,11 +315,11 @@ export function ChatFeed({
                     <button
                       type="button"
                       className="org-btn-confirm"
-                      disabled={isBusy}
+                      disabled={isBusy || org.superseded}
                       onClick={() => onConfirmOrganize(org)}
                       title="确认整理结果，启动管线生成 3D 模型"
                     >
-                      <Sparkles size={13} /> 立即开始造物
+                      <Sparkles size={13} /> {org.superseded ? '请确认后续方案' : '立即开始造物'}
                     </button>
                   )}
                 </div>

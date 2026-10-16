@@ -68,4 +68,4 @@ def adjust_plan(service, spec, adjustment, project, job):
     new_ids = {step.id for step in plan.steps}
     changed_parts += [step.name for step in previous.steps if step.id not in new_ids]
     apply_plan(service, spec, plan, job)
-    return adjustment.model_dump() | {"changes": changes, "parts": changed_parts}
+    return adjustment.model_dump() | {"changes": changes, "parts": changed_parts, "scope_validation": "passed" if adjustment.target_part_id else "not_requested"}

@@ -15,7 +15,10 @@ def inspect(project, assets, profile):
     limit = 180 - 2 * profile.margin_mm
     fits = bool((mesh.extents <= limit).all())
     closed = bool(mesh.is_watertight and mesh.is_winding_consistent and mesh.volume > 0)
-    components = len(mesh.split(only_watertight=False))
+    parts = list(mesh.split(only_watertight=False))
+    components = len(parts)
+    # 独立且离开底面的部件不会因整体网格封闭而自动连接到主体。
+    floating = sum(float(part.bounds[0][2] - mesh.bounds[0][2]) > 0.2 for part in parts)
     items = [
         {
             "name": "A1 mini 空间",
@@ -32,7 +35,7 @@ def inspect(project, assets, profile):
         {
             "name": "独立部件",
             "status": "pass" if components == 1 else "warn",
-            "detail": f"检测到 {components} 个部件；多个部件需要检查是否接触。",
+            "detail": f"检测到 {components} 个部件。" + (f"其中 {floating} 个部件悬空且未与主体连接；镂空字的封闭内圈可能造成这种情况，请加连桥或调整字形。支撑不会自动把它们连回主体。" if floating else "多个部件需要检查是否接触。" if components > 1 else "主体连为一体。"),
         },
         {
             "name": "壁厚与细节",

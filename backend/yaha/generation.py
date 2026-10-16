@@ -8,7 +8,8 @@ from .modeling.planner import current_plan, design_plan
 from .modeling.reviewing import refine_shape
 from .modeling.photo_strategy import select_photo_route, build_photo_result
 from .modeling.photo_quality import photo_completion
-from .modeling.design_review import review_design
+from .modeling.design_review import review_design, require_adjustment_acceptance
+from .modeling.geometry_review import review_geometry
 
 
 def start_generation(service, identifier, data, repair=False, *, adjustment=None, auto_photo=False):
@@ -23,8 +24,6 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
         raise DomainError("先生成参考造型，再用 AI 调整细节。", "AI_ADJUSTMENT_REQUIRES_PLAN")
     if adjustment and not service.editor:
         raise DomainError("当前建模服务未提供 AI 细节调整。", "AI_ADJUSTMENT_UNAVAILABLE")
-    if adjustment and not service.settings.public()["chat_supports_images"]:
-        raise DomainError("AI 微调需要对照修改前后的实际模型，请选择支持图片输入的模型。", "AI_CAPABILITY")
     if repair:
         if not project["model"]:
             raise DomainError("还没有模型可以修复。")
@@ -48,9 +47,12 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
         if review:
             result_spec, result = refine_shape(service, source, result, job, adjustment=adjustment_result)
         elif source.provider == "parametric" and not repair:
-            result_spec, result = review_design(service, source, result, project, job, adjustment=adjustment_result)
-            if adjustment_result and result[0].manifest["design_review"]["status"] != "accepted":
-                raise DomainError("微调成品未通过需求与保留区域审阅，原模型未被覆盖。" + result[0].manifest["design_review"]["message"], "AI_ADJUSTMENT_REVIEW")
+            if service.settings.public()["chat_supports_images"]:
+                result_spec, result = review_design(service, source, result, project, job, adjustment=adjustment_result)
+            else:
+                result_spec, result = review_geometry(service, source, result, project, job, adjustment=adjustment_result, require_change=bool(adjustment))
+            if adjustment_result:
+                require_adjustment_acceptance(result[0].manifest["design_review"])
         return result_spec, result
 
     def work(job):

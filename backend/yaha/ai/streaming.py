@@ -2,30 +2,38 @@
 
 import json
 from ..contracts import DomainError
+from .budgets import response_limits
 
-MAX_TEXT = 128 * 1024
-
-
-def events(response):
-    lines, size = [], 0
+def events(response, *, max_wire_bytes=None, max_event_bytes=None):
+    limits = response_limits(8192)
+    max_wire_bytes = max_wire_bytes or limits["max_wire_bytes"]
+    max_event_bytes = max_event_bytes or limits["max_event_bytes"]
+    lines, size, event_size = [], 0, 0
     for line in response.iter_lines():
+        received = len(line.encode("utf-8")) + 1
+        size += received
+        if size > max_wire_bytes:
+            raise DomainError(f"AI 流式响应累计数据超过接收上限（{max_wire_bytes // 1048576} MB，含协议与思考数据），不是对话上下文超限。请检查服务响应或调整 config/ai.yaml。", "AI_RESPONSE_LIMIT")
+        event_size += received
+        if event_size > max_event_bytes:
+            raise DomainError("AI 单个流式消息过大，请检查服务响应或调整 config/ai.yaml 中的单消息接收上限。", "AI_RESPONSE_LIMIT")
         if line.startswith("data:"):
             data = line[5:].lstrip()
-            size += len(data)
-            if size > 2 * 1024 * 1024:
-                raise DomainError("模型响应超出接收预算。", "AI_RESPONSE_LIMIT")
             lines.append(data)
-        elif not line and lines:
-            data, lines = "\n".join(lines), []
-            if data == "[DONE]":
-                return
-            yield json.loads(data)
+        elif not line:
+            event_size = 0
+            if lines:
+                data, lines = "\n".join(lines), []
+                if data == "[DONE]":
+                    return
+                yield json.loads(data)
     if lines:
         yield json.loads("\n".join(lines))
 
 
 class Decoder:
-    def __init__(self):
+    def __init__(self, *, max_text_chars=None):
+        self.max_text_chars = max_text_chars or response_limits(8192)["max_text_chars"]
         self.parts = []
         self.text_chars = 0
         self.received_chars = 0
@@ -38,8 +46,8 @@ class Decoder:
         if text:
             self.phase = "content"
             self.text_chars += len(text)
-            if self.text_chars > MAX_TEXT:
-                raise DomainError("模型方案超过文本预算。", "AI_RESPONSE_LIMIT")
+            if self.text_chars > self.max_text_chars:
+                raise DomainError(f"AI 最终方案超过接收上限（{self.max_text_chars} 字符），不是对话上下文超限。请检查模型输出配置。", "AI_RESPONSE_LIMIT")
             self.parts.append(text)
 
     def result(self):

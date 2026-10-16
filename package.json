@@ -9,6 +9,7 @@
     "desktop:build": "node scripts/build-desktop.mjs",
     "package": "pnpm package:windows",
     "package:windows": "node scripts/package-windows.mjs",
+    "package:portable": "node scripts/package-windows.mjs --portable",
     "build": "tsc --noEmit && vite build",
     "build:web": "vite build",
     "preview": "vite preview"
@@ -59,13 +60,31 @@
       }
     ],
     "win": {
-      "target": "portable",
+      "target": "nsis",
       "icon": "public/art/usagi/app-icon.ico",
       "signAndEditExecutable": true,
       "signExecutable": false
     },
     "portable": {
       "artifactName": "YaHa-Craft-${version}-Windows.exe"
+    },
+    "nsis": {
+      "artifactName": "YaHa-Craft-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "呀哈造物",
+      "uninstallDisplayName": "呀哈造物",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "installerLanguages": [
+        "zh_CN",
+        "en_US"
+      ],
+      "language": "2052"
     }
   },
   "dependencies": {

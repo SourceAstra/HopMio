@@ -4,6 +4,8 @@ import math
 
 
 def photo_completion(review):
+    if review and review.get("status") == "geometry_verified" and review.get("scope") == "geometry_only":
+        return {"status": "completed", "message": review["message"]}
     if not review:
         return {"status": "completed", "message": "作品做好啦！"}
     state = "draft" if review["status"] != "accepted" else review["scope"]

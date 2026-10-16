@@ -15,6 +15,8 @@ export interface ProposalData {
   jobId?: string;
   jobStatus?: string;
   jobMessage?: string;
+  jobErrorCode?: string;
+  superseded?: boolean;
   appliedRevisionId?: string | null;
 }
 
@@ -25,6 +27,7 @@ export interface MilestoneData {
 }
 
 export interface OrganizeData {
+  superseded?: boolean;
   prompt: string;
   template: string;
   height_mm?: number;

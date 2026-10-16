@@ -37,6 +37,30 @@ def extract_windows(file, root):
 EXTRACTORS = {"linux": extract_appimage, "win32": extract_windows}
 
 
+def check_cli(executable):
+    # 隔离本次帮助检查的回执；Windows GUI 程序可能不向重定向管道输出帮助。
+    with tempfile.TemporaryDirectory(prefix="bambu-help-") as directory:
+        result = subprocess.run(
+            [str(executable), "--help"], cwd=directory, capture_output=True,
+            text=True, encoding="utf-8", errors="replace", timeout=30,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        output = result.stdout + result.stderr
+        help_available = "--slice" in output and "--load-settings" in output
+        receipt_valid = False
+        receipt = Path(directory) / "result.json"
+        if sys.platform == "win32" and receipt.is_file():
+            try:
+                value = json.loads(receipt.read_text(encoding="utf-8"))
+                receipt_valid = (isinstance(value, dict) and value.get("return_code") == 0
+                                 and value.get("error_string") == "Success."
+                                 and {"prepare_time", "export_time", "plate_index"} <= value.keys())
+            except (OSError, ValueError):
+                pass
+        if result.returncode != 0 or not (help_available or receipt_valid):
+            raise RuntimeError(f"Bambu Studio 切片入口检查失败（退出码 {result.returncode}）：" + (output[-800:] or "没有帮助输出或有效 CLI 回执"))
+
+
 def prepare_cli_models(root, profiles):
     directory = profiles / "BBL/machine_full"
     directory.mkdir(exist_ok=True)
@@ -60,6 +84,7 @@ def main():
     if (target / "installation.json").is_file():
         file = target / "installation.json"
         metadata = json.loads(file.read_text())
+        check_cli(target / metadata["executable"])
         metadata["cli_models"] = prepare_cli_models(target, target / metadata["profiles"])
         temporary = file.with_suffix(".new")
         temporary.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -77,10 +102,7 @@ def main():
         profiles = list(staging.rglob("BBL.json"))
         if len(profiles) != 1:
             raise RuntimeError("Bambu Studio 缺少唯一官方打印参数库。")
-        result = subprocess.run([str(executable), "--help"], cwd=staging, capture_output=True, text=True, timeout=30)
-        output = result.stdout + result.stderr
-        if "--slice" not in output or "--load-settings" not in output:
-            raise RuntimeError("Bambu Studio 切片入口无法启动：" + output[-800:])
+        check_cli(executable)
         metadata = {"version": VERSION, "url": BASE + name, "sha256": expected, "executable": str(executable.relative_to(staging)), "profiles": str(profiles[0].parent.relative_to(staging))}
         metadata["cli_models"] = prepare_cli_models(staging, profiles[0].parent)
         (staging / "installation.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")

@@ -9,6 +9,7 @@ from .contracts import DesignSpec, ModelAdjustment, PrintProfile, DomainError
 from .storage.database import Database
 from .storage.assets import Assets
 from .storage.projects import Projects
+from .storage.conversations import Conversations, bounded_history, stored_context
 from .settings import Settings
 from .jobs import Jobs
 from .modeling.backend import ModelingBackend
@@ -33,6 +34,7 @@ class Service:
         self.db = Database(Path(root))
         self.assets = Assets(self.db)
         self.projects = Projects(self.db)
+        self.conversations = Conversations(self.db, self.projects)
         self.settings = Settings(self.db)
         self.jobs = Jobs(self.db)
         for asset in self.db.list("assets"):
@@ -132,6 +134,29 @@ class Service:
                 p.get("cloud", False),
                 history=p.get("history"),
             )
+        if method == "conversation.get":
+            return self.conversations.get(p["project_id"])
+        if method == "conversation.save":
+            return self.conversations.save(p["project_id"], p["messages"], p.get("expected_version"))
+        if method == "idea.converse":
+            from .ai.conversation import converse
+            spec = DesignSpec.model_validate(p.get("spec", {})).model_dump()
+            project_id, revision = p.get("project_id"), p.get("revision_id")
+            project = self.projects.get(project_id) if project_id else None
+            if project and project["revision_id"] != revision:
+                raise DomainError("作品版本已改变，请基于当前模型继续对话。", "REVISION_CHANGED")
+            if not project or not project.get("model"):
+                # 待生成的参数计划并不等于已有模型，不能生成无法执行的微调卡片。
+                spec["modeling_plan"] = None
+            history, pending = stored_context(self.conversations.get(project_id)["messages"], revision) if project_id else ([], None)
+            if isinstance(p.get("history"), list):
+                history = bounded_history(p["history"])
+            if isinstance(p.get("pending_proposal"), dict) and p["pending_proposal"].get("revision") == revision:
+                pending = p["pending_proposal"]
+            result = converse(p.get("text", ""), spec, self.settings, self.assets, history=history, pending=pending, selection=p.get("selection"), location_asset_id=p.get("location_asset_id"), location_point=p.get("location_point"))
+            if project_id and self.projects.get(project_id)["revision_id"] != revision:
+                raise DomainError("作品版本已改变，请基于当前模型继续对话。", "REVISION_CHANGED")
+            return result
         if method == "idea.adjustment":
             spec = DesignSpec.model_validate(p.get("spec", {})).model_dump()
             if not spec.get("modeling_plan"):
@@ -139,7 +164,18 @@ class Service:
                     "当前作品没有可编辑的 AI 参数方案，请先完成一键建模。",
                     "AI_ADJUSTMENT_UNAVAILABLE",
                 )
-            return suggest_adjustment(p.get("instruction", ""), spec, self.settings, self.assets, p.get("location_asset_id"), p.get("location_point"))
+            project_id, revision = p.get("project_id"), p.get("revision_id")
+            if project_id and self.projects.get(project_id)["revision_id"] != revision:
+                raise DomainError("作品版本已改变，请基于当前模型继续对话。", "REVISION_CHANGED")
+            history, pending = stored_context(self.conversations.get(project_id)["messages"], revision) if project_id else ([], None)
+            if isinstance(p.get("history"), list):
+                history = bounded_history(p["history"])
+            if isinstance(p.get("pending_proposal"), dict) and p["pending_proposal"].get("revision") == revision:
+                pending = p["pending_proposal"]
+            result = suggest_adjustment(p.get("instruction", ""), spec, self.settings, self.assets, p.get("location_asset_id"), p.get("location_point"), history=history, pending=pending)
+            if project_id and self.projects.get(project_id)["revision_id"] != revision:
+                raise DomainError("作品版本已改变，本次建议没有覆盖当前对话，请继续描述。", "REVISION_CHANGED")
+            return result
         if method == "model.generate":
             return self.generate(p["id"], p["spec"], auto_photo=p.get("auto_photo", True) is True)
         if method == "model.adjust":
@@ -181,6 +217,9 @@ class Service:
             return value
         if method == "project.export":
             return export_project(self.projects.get(p["id"]), self.assets, p["format"])
+        if method == "studio.open":
+            from .slicing.handoff import open_studio
+            return open_studio(self.assets, p.get("asset_id"))
         if method == "project.import":
             from .importing import import_package
 
@@ -188,12 +227,15 @@ class Service:
         if method == "model.repair":
             project = self.projects.get(p["id"])
             return self.generate(project["id"], project["spec"], repair=True)
+        if method in ("settings.models.discover", "settings.models.test"):
+            from .ai.model_probe import discover_models, test_model
+            return (discover_models if method.endswith("discover") else test_model)(self.settings, p)
         if method == "settings.get":
             return self.settings.public() | self.runtime_status()
         if method == "settings.unlock":
             return self.settings.unlock(p["pin"])
         if method == "settings.update":
-            return self.settings.update(p["token"], p["values"]) | self.runtime_status()
+            return self.settings.update(p.get("token", ""), p["values"]) | self.runtime_status()
         if method == "workshop.templates":
             return [
                 {

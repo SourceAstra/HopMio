@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path
 from ..contracts import DomainError
+from .model_options import model_options
 
 
 def _default_config_path():
@@ -38,22 +39,13 @@ def load_model(alias=None):
             key = ""
         else:
             key = re.sub(r"\$\{([A-Za-z_][A-Za-z_0-9]*)\}", lambda match: os.environ.get(match[1], ""), key_reference)
-        timeout, tokens = item.get("timeout_seconds", 300), item.get("max_tokens", 8192)
-        if not 30 <= timeout <= 600 or not 1024 <= tokens <= 32768:
-            timeout, tokens = 300, 8192
-        effort = item.get("reasoning_effort")
-        if effort not in (None, "low", "medium", "high", "max"):
-            effort = None
-        return {
+        return model_options(item) | {
             "chat_url": item["model_url"],
             "chat_model": item["model"],
             "chat_protocol": item.get("protocol", "chat"),
             "key": key,
             "account": target_alias,
             "supports_images": item.get("supports_images", False),
-            "timeout_seconds": timeout,
-            "max_tokens": tokens,
-            "reasoning_effort": effort,
         }
     except Exception:
         return None

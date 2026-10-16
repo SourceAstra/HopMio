@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Box, Layers, Images, Sparkles, Download, Clock3 } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
-import { isModelDraft, reconstructionReport } from '../features/modeling/quality';
+import { isModelDraft, isGeometryOnly, reconstructionReport } from '../features/modeling/quality';
+import { GeometryReviewNotice } from '../features/modeling/GeometryReviewNotice';
 import { call, assetUrl } from '../api/client';
 import { IdeaPanel } from '../features/workbench/IdeaPanel';
 import { AdjustPanel } from '../features/workbench/AdjustPanel';
@@ -66,9 +67,7 @@ export function Workbench() {
   const activeAssetId =
     view === 'stageA' && hasStageA
       ? saved?.source_glb_id
-      : draft?.glb_id || saved?.manufacturing_glb_id ||
-        model?.glb_id ||
-        saved?.glb_id;
+      : draft?.glb_id || saved?.manufacturing_glb_id || model?.glb_id || saved?.glb_id;
 
   return (
     <div className="workbench-page-wrapper">
@@ -78,9 +77,7 @@ export function Workbench() {
           <h1>
             造物桌 <span>✦</span>
           </h1>
-          <p className="workbench-slogan">
-            别动脑，喊出你的想法 — 剩下的交给乌萨奇
-          </p>
+          <p className="workbench-slogan">别动脑，喊出你的想法 — 剩下的交给乌萨奇</p>
         </div>
         <div className="workbench-heading-actions">
           <button
@@ -104,7 +101,9 @@ export function Workbench() {
       />
 
       {/* 核心造物桌面：默认两栏宽敞布局，点击阶段展开右侧微调抽屉 */}
-      <div className={`workbench-grid full-height ${inspectStage !== null ? 'with-stage-drawer' : ''}`}>
+      <div
+        className={`workbench-grid full-height ${inspectStage !== null ? 'with-stage-drawer' : ''}`}
+      >
         {/* 左栏：AI 大脑 · 视觉理解与形体规划中枢 */}
         <IdeaPanel
           selectedPartId={selectedPartId}
@@ -175,7 +174,11 @@ export function Workbench() {
                     ? '等待启动管线'
                     : s.dirty
                       ? '上一版本 · 待更新'
-                      : isModelDraft(saved) ? '待改进草稿 · 未通过造型审阅' : '制造模型已生成'}
+                      : isGeometryOnly(saved)
+                        ? '几何已更新 · 外观待确认'
+                        : isModelDraft(saved)
+                          ? '待改进草稿 · 未通过造型审阅'
+                          : '制造模型已生成'}
               </span>
 
               {s.project && (
@@ -226,6 +229,7 @@ export function Workbench() {
           </div>
 
           {/* 位置 2：A+B 物理制造指标仪表盘底座 */}
+          {!draft && <GeometryReviewNotice model={saved} />}
           <div className="model-bottom-status-bar">
             {s.running && s.job ? (
               <div className="model-panel-progress-inline">
@@ -252,13 +256,21 @@ export function Workbench() {
               <div className="pipeline-metrics-dashboard">
                 {/* 阶段 A 逆向物理指标 */}
                 <div className="metric-chip chip-stage-a" title="阶段 A 摄影测量重构指标">
-                  <span className="chip-tag">{scan ? '阶段 A 表面重建' : s.spec.provider === 'reconstruction' ? '等待表面重建' : '参数几何模型'}</span>
+                  <span className="chip-tag">
+                    {scan
+                      ? '阶段 A 表面重建'
+                      : s.spec.provider === 'reconstruction'
+                        ? '等待表面重建'
+                        : '参数几何模型'}
+                  </span>
                   <span className="chip-val">
                     {typeof scan?.dense_points === 'number'
                       ? `${scan.dense_points.toLocaleString()} 稠密点`
                       : scan?.source_faces
                         ? `${scan.source_faces.toLocaleString()} 扫描面`
-                        : model?.faces ? `${model.faces.toLocaleString()} 面` : '—'}
+                        : model?.faces
+                          ? `${model.faces.toLocaleString()} 面`
+                          : '—'}
                   </span>
                   <span className="chip-sub">
                     {scan
@@ -273,10 +285,18 @@ export function Workbench() {
                 <div className="metric-chip chip-stage-b" title="阶段 B Blender 工业精修与切平指标">
                   <span className="chip-tag">阶段 B 制造精修</span>
                   <span className="chip-val">
-                    {model?.size_mm ? `${model.size_mm.map((v) => v.toFixed(1)).join(' × ')} mm` : '—'}
+                    {model?.size_mm
+                      ? `${model.size_mm.map((v) => v.toFixed(1)).join(' × ')} mm`
+                      : '—'}
                   </span>
                   <span className="chip-sub">
-                    {model ? isModelDraft(saved) ? '造型审阅未通过 · 待改进草稿' : s.project?.validation?.can_prepare ? '制造体检已通过' : '模型已生成 · 待制造体检' : '待精修成型'}
+                    {model
+                      ? isModelDraft(saved)
+                        ? '造型审阅未通过 · 待改进草稿'
+                        : s.project?.validation?.can_prepare
+                          ? '制造体检已通过'
+                          : '模型已生成 · 待制造体检'
+                      : '待精修成型'}
                   </span>
                 </div>
 
@@ -328,4 +348,3 @@ export function Workbench() {
     </div>
   );
 }
-
