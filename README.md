@@ -1,62 +1,75 @@
+<div align="center">
+
+<img src="public/art/usagi/app-icon.png" width="132" alt="呀哈造物应用图标" />
+
 # 呀哈造物 · YaHa Craft
+
+**别动脑，喊出你的想法 —— 剩下的交给乌萨奇 🐰**
+
+面向 12 岁孩子和家长共同创作的乌萨奇主题 3D 造物工作台：\
+喊出一句话、拍张照片或画一笔涂鸦，AI 规划参数、Blender 生成真实水密模型、Bambu Studio 完成真实切片，直通拓竹 A1 mini 打印。
+
+[![Release](https://img.shields.io/github/v/release/SourceAstra/HopMio?style=flat-square&label=%E5%8F%91%E8%A1%8C%E7%89%88)](https://github.com/SourceAstra/HopMio/releases)
+[![License](https://img.shields.io/badge/%E4%BB%A3%E7%A0%81-MIT-yellow?style=flat-square)](LICENSE)
+[![Assets](https://img.shields.io/badge/%E7%B4%A0%E6%9D%90-CC%20BY--NC%204.0-orange?style=flat-square)](NOTICE.md)
+![Platform](https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%20%7C%20Linux-blue?style=flat-square)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)
+
+**[English](README.en.md)** · [系统设计规范](docs/呀哈造物系统详细设计规范.md) · [参与贡献](CONTRIBUTING.md) · [安全政策](SECURITY.md)
+
+![呀哈造物主页：三栏造物大厅](docs/images/home.png)
+
+</div>
 
 <!-- RELEASE_VERSION_START -->
 当前发布版本：**v0.1.2**。发行包与校验文件见 [GitHub Releases](https://github.com/SourceAstra/HopMio/releases)。
 <!-- RELEASE_VERSION_END -->
 
-**别动脑，喊出你的想法--- 剩下的交给乌萨奇**
-
-孩子和家长共同使用的乌萨奇主题造物工作台。React / Three.js 提供网页和预览，Electron 提供 Windows 桌面入口，Python 管理作品与任务。
-
-当前提供两条建模路径：**AI大模型规划参数 → Blender 制作设计**，以及 **重叠照片 → COLMAP/OpenMVS 恢复表面 → Blender 制作制造副本**。人物、玩具、家用品与电器外形使用统一工具。明确写下的刻字与孔形必须落入真实几何工具（真实字体挤出、圆柱减法），生成结果再经 AI 成品审阅把关。模型不执行 AI 返回的脚本；质量门槛、来源与 A1 mini 实际切片见 [呀哈造物系统详细设计规范](docs/呀哈造物系统详细设计规范.md)。
-
 ---
 
-## 🎨 核心空间与界面效果
+## ✨ 它能做什么
 
-### 默认主页：三栏造物桌
-启动后默认进入晨曦暖白（Morning Pearl）创客风的三栏造物桌：左侧灵感输入与智能整理、中间 Three.js 硬件加速实时 3D 视口、右侧独立部件参数微调与版本时光机。
+孩子在造物大厅喊出一句大白话（“高 100mm，壁厚 3mm 的圆笔筒”），上传参考照片，或画一笔涂鸦，呀哈造物完成剩下的：
 
-![三栏造物桌](docs/images/workbench.png)
+| 步骤 | 发生什么 |
+| --- | --- |
+| 1️⃣ 输入想法 | 大白话描述、参考照片、涂鸦或多视角照片 |
+| 2️⃣ AI 梳理想法 | 结合聊天上下文整理成结构化方案，标注推测项，确认后进入生成 |
+| 3️⃣ AI 蓝图规划 | 提取结构化几何参数；刻字、圆孔等明确要求必须落成真实工具步骤 |
+| 4️⃣ 参数微调 | 右侧滑块精细调整，或直接说“耳朵大一点”执行限定到所选部件的自然语言补丁 |
+| 5️⃣ 本地生成与审阅 | Blender 生成物理实体（真实字体挤出、圆柱减法、毫米级尺寸、流形水密核验），渲染图再由 AI 成品审阅把关 |
 
-### 小屋门厅：六种造物模式
-在小屋门厅自由选择创作模式：大白话造物、画画变挂件、照片小浮雕、照片参考造物、多视角表面重构与老作品焕新。
+**两条建模路径**：AI 大模型规划参数 → Blender 制作设计；重叠照片 → COLMAP/OpenMVS 恢复表面 → Blender 制作制造副本。
 
-![小屋门厅](docs/images/hall.jpg)
+**真实性承诺**：模型不执行 AI 返回的脚本；切片数据全部来自 Bambu Studio 官方 CLI 真实回执，拒绝前端估算；质量门槛与来源详见[系统设计规范](docs/呀哈造物系统详细设计规范.md)。
 
-### 乌萨奇展厅：亲子共创故事墙
-支持 3D 虚拟展台旋转摆放、上传实物打印成果照片，沉淀孩子的创意灵感、修改历程与软件成长记录。
+## 📸 界面一览
 
-![乌萨奇展厅](docs/images/gallery.jpg)
+| 三栏造物桌 · 实时 3D + AI 对话 + 参数微调 | 乌萨奇展厅 · 亲子共创故事墙 |
+| :---: | :---: |
+| ![三栏造物桌](docs/images/workbench.png) | ![乌萨奇展厅](docs/images/gallery.png) |
 
----
+| 小屋工坊 · 孩子的第一个代码入口 | 打印制造站 · A1 mini 真实切片与云打印 |
+| :---: | :---: |
+| ![小屋工坊](docs/images/workshop.png) | ![打印制造站](docs/images/printing.png) |
 
-## 安装与启动
+家长控制台独立门禁保护 AI 密钥与设备操作：
 
-### Windows 安装程序（给使用者）
+![家长安全门禁](docs/images/parental.png)
 
-发布安装包后，下载 `YaHa-Craft-Setup-版本号-x64.exe`，双击按向导选择安装目录。安装程序会创建“呀哈造物”桌面及开始菜单快捷方式，可在 Windows“设置 → 应用”中卸载；卸载不删除 `%LOCALAPPDATA%\YaHaCraft\data` 中的作品与设置。面向 Windows 10/11 x64，暂不提供 32 位版本。
+## 🚀 快速开始
 
-安装包包含网页、桌面入口、Python 和引擎依赖，使用者无需安装 Node.js、Go 或系统 Python。Blender、OpenMVS、Bambu Studio 作为独立三维工具安装，已有工具会自动识别；需要安装时，在应用安装目录运行 `resources\tools\安装建模工具.cmd`，完成后重启应用。AI 模型地址与密钥由使用者在设置页自行配置。
+### 方式一：Windows 安装包（推荐给使用者）
 
-### 生成 Windows 安装包（给开发者）
+从 [GitHub Releases](https://github.com/SourceAstra/HopMio/releases) 下载 `YaHa-Craft-Setup-版本号-x64.exe`，双击按向导安装。安装包自带网页、桌面入口、Python 与引擎依赖，**无需安装 Node.js、Go 或系统 Python**；卸载不会删除 `%LOCALAPPDATA%\YaHaCraft\data` 中的作品与设置。面向 Windows 10/11 x64。
 
-先安装下文的项目依赖，然后双击 `打包呀哈造物安装包.cmd`，或运行：
+Blender、OpenMVS、Bambu Studio 作为独立三维工具安装（已有工具会自动识别），需要时在应用安装目录运行 `resources\tools\安装建模工具.cmd`。AI 模型地址与密钥在应用内“家长与设置”自行配置。
 
-```powershell
-pnpm package:windows         # 安装向导版（默认）
-pnpm package:portable        # 可选：便携版
-```
+### 方式二：从源码运行（开发者）
 
-安装程序输出为 `release/YaHa-Craft-Setup-0.1.2-x64.exe`，旁边的 `.sha256` 是校验文件；版本号取自 `package.json`。全部中间文件放在 `.artifacts/package-windows/`，旧发行包和本机作品库不会被打包清理。当前安装包未配置代码签名，Windows 可能显示发布者未验证。
+需要 Node.js 24+、pnpm、Python 3.12 x64、Go 和 Blender 4.5 LTS（Blender 有自己的 Python 环境，不需要在项目虚拟环境安装 `bpy`）。
 
-GitHub Release 不是安装包生成器：先打包，再把 EXE 和校验文件作为附件上传；下方 `publish.sh` 也可上传 `release/` 中的文件。日常调试继续使用网页入口，发布时再生成安装包。
-
-### 从源码运行
-
-需要 Node.js 24+、pnpm、Python 3.12 x64 和 Blender 4.5 LTS。Blender 有自己的 Python 环境，不需要在项目虚拟环境安装 `bpy`。
-
-Windows 在项目目录执行：
+**Windows**：双击 [安装建模工具.cmd](安装建模工具.cmd) 安装三维工具，再运行 `启动YaHa.cmd`；或手动执行：
 
 ```powershell
 py -3.12 -m venv .venv
@@ -66,11 +79,7 @@ pnpm install --frozen-lockfile
 启动YaHa.cmd
 ```
 
-先切换到目标分支，再执行 `./publish.sh [版本号] [提交说明] --branch main`。脚本更新 README 与 `package.json` 版本号，提交当前项目改动，拉取并推送指定分支和 tag；不会重新打包。`release/` 中已有文件会生成 SHA256 并上传，也可用 `--assets DIR` 指定其他目录。安装并登录 GitHub CLI `gh` 后会创建或更新 GitHub Release；没有发行包时只发布源码。脚本会先展示待提交改动并请求确认，排除本地作品库与日期截图。默认版本在拉取分支后自动递增 patch（例如 `0.1.2` → `0.1.3`）；默认分支为 `main`。
-
-也可双击 [安装建模工具.cmd](安装建模工具.cmd) 安装 Blender、OpenMVS 和 Bambu Studio，再运行 `启动YaHa.cmd`。源码启动需要 Go。Windows 本机网页版与桌面版均可直接拉起 Bambu Studio：打印准备台可单独打开程序，体检页和打印准备台可将当前模型作为 3MF 直接交给它打开。此操作不要求先通过体检，不执行切片或发送打印任务；有未生成的参数修改时先生成新版本。
-
-Linux 在项目目录执行：
+**Linux**：
 
 ```bash
 python3.12 -m venv .venv
@@ -80,16 +89,38 @@ pnpm install --frozen-lockfile
 ./deploy.sh --foreground
 ```
 
-网页访问 `http://127.0.0.1:5173`。保留启动终端，按 Ctrl+C 停止。服务仅监听本机；修改源码后需重新构建并重启。
+网页访问 `http://127.0.0.1:5173`，保留终端按 Ctrl+C 停止。服务仅监听本机。
 
-安装入口共用 [scripts/install-blender.py](scripts/install-blender.py)，从 Blender 官方源下载 4.5.14 LTS，验证官方 SHA-256 后解压，执行版本检查，最后提交安装目录；失败不会替换已有安装。无需管理员权限。
+<details>
+<summary><b>Linux 部署命令与环境变量</b></summary>
+
+[deploy.sh](deploy.sh) 是 Linux 部署与启动的统一入口：默认编译 Go 宿主与前端，再后台启动宿主和 Python 引擎；不安装系统服务。PID 身份与日志保存在 `.artifacts/linux`。
+
+```bash
+./deploy.sh             # 编译后后台启动
+./deploy.sh --start     # 使用已有程序后台启动，不编译
+./deploy.sh --no-start  # 编译并更新程序，停止旧进程，不启动
+./deploy.sh --stop      # 停止本项目后台进程及其子进程
+./deploy.sh --status    # 查看本项目后台进程状态
+./deploy.sh --restart   # 使用已有程序重启
+tail -f .artifacts/linux/yaha.log
+```
+
+环境变量：`YAHA_PYTHON` 指定引擎解释器（默认 `.venv/bin/python`）；`YAHA_DATA_DIR` 指定作品目录（默认 `.state`）；`YAHA_PORT` 指定端口（默认 5173）；`YAHA_WEB_DIR` 指定前端资源目录（新构建统一写入 `.artifacts/web`）。不依赖 systemd，脚本只停止自己启动的进程。Windows 启动脚本会关闭占用 5173 的旧进程；Linux 端口冲突会直接报错。
+
+</details>
+
+<details>
+<summary><b>Blender 路径与运行时配置</b></summary>
+
+安装入口共用 [scripts/install-blender.py](scripts/install-blender.py)：从 Blender 官方源下载 4.5.14 LTS，验证官方 SHA-256 后解压，失败不会替换已有安装，无需管理员权限。
 
 | 平台 | 默认 Blender 路径 |
 | --- | --- |
 | Linux | `~/.local/share/yaha-craft/blender/4.5.14/blender` |
 | Windows | `%LOCALAPPDATA%\yaha-craft\blender\4.5.14\blender.exe` |
 
-运行时读取本项目 [config/modeling.yaml](config/modeling.yaml)，默认自动发现上述路径，再查找 PATH。已有 Blender 可通过 `blender_path` 或 `YAHA_BLENDER` 指定**可执行文件**；路径可以包含空格，配置不需要额外的 shell 引号。版本范围、超时、面数和单文件大小预算也在此配置。
+运行时读取 [config/modeling.yaml](config/modeling.yaml)，默认自动发现上述路径再查找 PATH；已有 Blender 可通过 `blender_path` 或 `YAHA_BLENDER` 指定**可执行文件**（路径可含空格，无需额外引号）。
 
 ```yaml
 schema_version: yaha.modeling-runtime/v1
@@ -100,92 +131,83 @@ max_faces: 200000
 max_output_mb: 40
 ```
 
-当前 Linux 已安装 Blender 4.5.14 LTS、OpenMVS 2.4.0、pycolmap 4.2.1 和 Bambu Studio 02.08.02.61，并实际完成建模与切片。Windows 已完成这些工具的安装与启动检查：OpenMVS 兼容帮助信息写入独立日志的情况，Bambu Studio 兼容标准输出为空但生成有效 CLI 回执的情况；实际建模、重建与切片效果仍需验收。
+当前 Linux 已实测 Blender 4.5.14 LTS、OpenMVS 2.4.0、pycolmap 4.2.1、Bambu Studio 02.08.02.61 完成建模与切片；Windows 已完成工具安装与启动检查，完整制造流程仍需验收。
 
-## Linux 一键部署
+</details>
 
-[deploy.sh](deploy.sh) 是 Linux 部署与启动的统一入口。默认编译 Go 宿主与前端，再后台启动宿主和 Python 引擎；不安装系统服务、不设置自动启动。PID 身份与日志保存在 `.artifacts/linux`，脚本只停止自己启动的进程及其子进程。依赖和三维工具仍按上面的安装步骤配置。
+<details>
+<summary><b>生成 Windows 安装包与发布</b></summary>
 
-```bash
-./deploy.sh             # 编译后后台启动
-./deploy.sh --start     # 使用已有程序后台启动，不编译
-./deploy.sh --build     # 同默认行为
-./deploy.sh --no-start  # 编译并更新程序，停止旧进程，不启动
-./deploy.sh --stop      # 停止本项目后台进程及其子进程
-./deploy.sh --status    # 查看本项目后台进程状态
-./deploy.sh --restart   # 使用已有程序重启
-./deploy.sh --foreground # 使用已有程序前台启动，Ctrl+C 停止
-tail -f .artifacts/linux/yaha.log
+```powershell
+pnpm package:windows         # 安装向导版（默认）
+pnpm package:portable        # 可选：便携版
 ```
 
-不依赖 systemd。`YAHA_PYTHON` 可指定引擎解释器，默认优先使用 `.venv/bin/python`；`YAHA_DATA_DIR` 指定作品目录，默认 `.state`；`YAHA_PORT` 指定端口，默认 5173。`YAHA_WEB_DIR` 可指定前端资源目录，新构建统一写入 `.artifacts/web`；已有 `dist` 仅兼容读取。脚本不删除作品、不自动终止其他端口占用者；没有系统服务或登录时自动启动。
+安装程序输出为 `release/YaHa-Craft-Setup-版本号-x64.exe`，旁边 `.sha256` 是校验文件；中间文件全部在 `.artifacts/package-windows/`，不会打包清理旧发行包与本机作品库。当前未配置代码签名，Windows 可能提示发布者未验证。
 
-Windows 启动脚本会关闭占用 5173 的旧进程；Linux 端口冲突会直接报错。桌面发布仍是 Windows EXE，现有 `release/` 文件不会因源码修改自动更新。
+发布流程：先打包，再执行 `./publish.sh [版本号] [提交说明] --branch main` 更新版本号、提交、推送 tag 并把 `release/` 文件（含 SHA256）上传为 GitHub Release（需安装登录 `gh`）。脚本默认在拉取分支后自动递增 patch，发布前会展示待提交改动并请求确认。
 
-## AI 配置与造物
+</details>
 
-### 1. 服务配置
-直接进入“家长与设置”，无需密码或解锁。页面分为“模型配置”和“发现模型”两个 Tab：默认在配置页管理候选、测试能力、编辑连接及预算；发现页填写 HTTPS 服务地址与 API Key，点击“发现可用模型”，勾选后加入候选列表，也可手动填写模型标识。添加后回到配置页继续管理，切换 Tab 会保留输入与发现结果。地址可使用 API 根地址或完整的 `/chat/completions`、`/messages` 端点。候选模型支持单独测试、编辑、移除和选用，点击“保存模型配置”后生效。密钥保存到系统凭据库；发现与测试不会保存临时输入的密钥。
+## 🤖 AI 模型配置
 
-在模型连接表单的“输入、输出与等待设置”中，可分别配置上下文窗口、最大输入 Token、最大输出 Token（256–1048576）、最长等待时间（30–1800 秒）和思考强度。上下文/输入允许 0–16777216；上下文设为 0 表示未知，输入设为 0 时按上下文减去预留输出自动分配，两者都为 0 时不设本地输入上限，厂商限制仍有效。进入设置默认编辑当前模型；预算区域点击“保存此模型预算”即可直接保存，下次调用生效，无需再点页底保存或重启。修改地址、名称、密钥或添加新候选时，仍使用“更新候选模型/加入候选列表”与“保存模型配置”。256K 输出可以填 262144（按服务实际口径填写），同时给输入留下上下文空间；部分模型的思考过程也占用输出。快速文字/图片能力测试仍使用小额输出，不运行完整建模任务。
+进入“家长与设置”即可配置（无默认密码，首次进入自行设置）。支持保存多个大模型并随时切换，密钥保存到系统凭据库，不进入源码与日志。
 
-候选卡片分别提供“测试文字能力”和“测试图片能力”。图片测试发送内置随机测试图，核对模型能否正确识别数字、颜色与形状；通过后自动启用该候选的图片能力，保存配置后生效。测试请求可能计费，不提交作品或个人照片、不消耗应用的造物任务次数；基础识别通过不代表照片建模效果。发现列表可能包含当前套餐不可用的模型，请以实际测试结果为准。暂不提供发现接口的服务仍可手动配置。
+- **模型发现**：填写 HTTPS 服务地址与 API Key 一键发现可用模型，或手动填写模型标识；地址支持 API 根地址或完整 `/chat/completions`、`/messages` 端点。
+- **能力测试**：候选卡片可单独“测试文字能力 / 测试图片能力”（图片测试发送内置测试图核对识别，通过后自动启用图片能力）。
+- **预算与等待**：每个模型可单独配置上下文窗口、最大输入/输出 Token、最长等待时间与思考强度。
+- **启动预设**：[config/models.yaml](config/models.yaml) 提供启动预设，密钥通过环境变量注入。默认内置 GLM（智谱，多模态）与 DeepSeek 两个候选。
 
-支持保存多个大模型配置并随时切换：在应用“家长与设置”中新增、编辑、删除模型，并为每个模型单独安全保存密钥；[config/models.yaml](config/models.yaml) 提供启动预设（密钥通过环境变量注入，不进入源码与日志）。默认内置：
-- **GLM (智谱)**：Messages 端点，支持多模态图像理解，环境变量 `YAHA_AI_API_KEY`；
-- **DeepSeek**：Chat Completions 端点，专注自然语言参数规划，环境变量 `YAHA_DEEPSEEK_API_KEY`。
+照片微调与生成后的成品审阅需要支持图像输入的模型；纯文本模型仍可用于参数规划。
 
-照片微调与生成后的成品审阅需要把预览图发给大模型，请激活支持图像输入的模型；纯文本模型仍可用于参数规划。
+## 🧱 技术栈与架构
 
-### 2. 造物闭环 (五步工作流)
-1. **输入想法**：在造物台输入大白话（如“高100mm，壁厚3mm的圆笔筒”）或在取材角上传参考照片；
-2. **AI 梳理想法**：大模型先结合聊天上下文，把设想整理成模板、尺寸、底座与开孔等结构化设定并标注推测项，确认后再进入生成；
-3. **AI 蓝图规划**：大模型提取结构化几何参数；刻字、圆孔等明确要求必须落成真实工具步骤，不能只写进假设说明；
-4. **参数微调**：在右侧面板通过滑块精细调整，或直接输入“耳朵大一点”执行限定到所选部件的自然语言补丁；
-5. **本地生成与成品审阅**：受信任 Blender 引擎生成物理实体——真实字体挤出刻字、圆弧圆角板面、毫米级尺寸与流形水密核验；渲染预览再由 AI 审阅形体、特征、刻字、微调与保留项，未通过的结果保留为草稿而非直接定稿。
-
----
-
-## 资产管理、版本与真实打印
-
-### 1. 资产交付与格式规范
-每次生成均产生版本快照，支持无损回退与对比：
-- `.blend`：原始 Blender 场景与修改器，保留完整拓扑语义，支持外部高级手动编辑；
-- `.stl` / `.3mf`：毫米级绝对尺度生产文件，100% 封闭水密，供 3D 打印直接使用；
-- `.glb`：轻量级预览格式，支持 Three.js 硬件加速视口实时交互与切面预览。
-
-### 2. 拓竹 A1 mini 真实切片
-- 在“打印准备台”选择耗材（PLA/PETG）、喷嘴与层高；
-- 集成官方 Bambu Studio CLI 执行真实切片，生成 `.gcode.3mf`，精确获取层数、耗材克数与打印时长；
-- 拒绝粗糙前端估算，所有制造数据与支撑分析均来自切片引擎真实回执。
-
-> 完整系统拓扑、A+B 逆向重构管线与强类型数据契约，详见 [呀哈造物系统详细设计规范](docs/呀哈造物系统详细设计规范.md)；造物桌质量问题的根因证据链与修复记录见 [造物桌质量调试记录](docs/造物桌质量调试记录.md)。
-
-
-## 代码边界
-
-### 每件作品的连续造物会话
-
-- 对话随作品保存在本地 SQLite 中；刷新页面、重启程序或切换作品后可继续讨论。首次打开会迁移当前浏览器已有的作品聊天记录。
-- 微调结合当前模型、最近对话和最新待确认方案理解后续要求。例如先说“添加镂空 Usagi”，再说“放在这一面正中间”，会整理为保留文字和镂空效果的完整修改方案。
-- 完整记录留在作品会话中（当前每件作品最多 1000 条）；去除原有固定 64 条/60,000 字符裁剪。每次调用按当前候选模型的输入预算保留历史，超预算才移除最早历史；当前模型、系统规则、最新要求与待确认方案不截断，必要内容本身超预算时在发送前报错。输入 Token 是本地文本估算，图片 Token 与精确使用量由厂商计数；任务诊断记录估算值、历史移除条数与厂商返回的 usage。
-- “细节微调”和“整体灵感”已统一为“造物对话”：助手在一次请求中判断继续修改、重新设计或先回答/澄清，所有几何修改仍需确认。文字模型可以直接执行参数与几何微调，经真实 Blender 网格、尺寸和文字布尔效果检查后保存新版本，并标注“几何已更新 · 外观待确认”。截图定位仍需要图片能力；启用图片能力的模型继续对照实际成品做视觉审阅，审阅失败不会降级为几何通过。
-- 输出 token 上限沿用当前模型的 `max_tokens`；接收保护按这个值计算累计传输与最终文本上限，并独立限制 SSE 单条消息。协议元数据和思考片段不会计入最终方案文本。相关倍率在 `config/ai.yaml` 中集中设置；异常接收、输出截断与对话截取分别处理，不再统一报“超出预算”。
-- 后续方案会替代尚未执行的旧方案；模型版本或实际参数发生变化时需要重新整理建议，单纯移动点选位置不会阻止重试。
-- 体检制造页会显示阻塞打印准备的具体原因，并在模型旁提供“开始体检”。修复任务内部的输入转换不会被当成用户未保存修改；确有待修改参数时，可以明确选择使用已保存模型。体检记录须匹配当前模型版本与打印配置，才可进入准备台。
-- 成品审阅遇到 HTTP 429 时保留原模型，显示限流原因，可稍后重试或更换可用模型。多窗口同时修改会话时会提示冲突，避免静默覆盖。
+**前端** React 19 + Three.js（硬件加速 3D 视口）· **桌面** Electron · **宿主** Go · **引擎** Python 3.12 · **几何** Blender 4.5 LTS · **重构** COLMAP / OpenMVS · **切片** Bambu Studio CLI
 
 | 目录 | 职责 |
 | --- | --- |
 | `src/pages`、`src/features` | 房间、方案确认、参数、版本与打印界面 |
 | `src/components`、`src/theme` | 共享组件、乌萨奇、预览与主题 |
 | `desktop`、`shared` | 进程桥接与公开能力清单 |
+| `cmd/server`、`core-go` | Go 宿主服务（可零 Node.js 依赖直接运行） |
 | `backend/yaha/modeling` | 计划契约、参数编译、意图校验、成品审阅与网格复测 |
 | `backend/yaha/reconstruction` | 照片观测、相机求解、通用表面与纹理 |
-| `backend/yaha/slicing` | 官方预设展开、A1 mini切片与真实结果检查 |
+| `backend/yaha/slicing` | 官方预设展开、A1 mini 切片与真实结果检查 |
 | `backend/yaha/blender` | 在 Blender 内执行的可信工具与品牌资产 |
 | `backend/yaha/geometry` | 图片输入准备与网格读取 |
 | `backend/yaha/ai` | 模型注册与 JSON 协议适配 |
 | `backend/yaha/storage` | SQLite、不可变版本及受控资产 |
 
-孩子的参数与模板入口见 [呀哈造物系统详细设计规范](docs/呀哈造物系统详细设计规范.md)。近期修改已完成针对性的构建与自动检查，Windows 已验证工具安装和 Bambu Studio 模型交接。当前 Linux 已安装固定版本的 Blender 4.5.14、pycolmap 4.2.1、OpenMVS 2.4.0 和 Bambu Studio 02.08.02.61，已实际制作100×70×24 mm放样收纳盘并完成A1 mini真实切片。Windows 完整制造流程、完整回归和实体打印仍需验收；参数几何通过检查不能替代外观与实物检查。
+<details>
+<summary><b>造物对话与数据细节</b></summary>
+
+- 对话随作品保存在本地 SQLite，刷新、重启或切换作品后可继续；每件作品最多 1000 条，按当前模型输入预算保留历史。
+- “造物对话”统一了微调与灵感：助手在一次请求中判断继续修改、重新设计或先澄清，所有几何修改仍需确认；文字模型可直接执行参数与几何微调，启用图片能力的模型继续对照实际成品做视觉审阅，审阅失败不会降级为几何通过。
+- 多窗口同时修改会话会提示冲突，避免静默覆盖；429 限流保留原模型并显示原因。
+- 体检记录须匹配当前模型版本与打印配置才可进入打印准备台；体检页显示阻塞打印的具体原因。
+
+</details>
+
+## 📦 版本与资产交付
+
+每次生成均产生**不可变版本快照**，支持无损回退与对比：
+
+| 格式 | 用途 |
+| --- | --- |
+| `.blend` | 原始 Blender 场景与修改器，保留完整拓扑语义，支持外部高级编辑 |
+| `.stl` / `.3mf` | 毫米级绝对尺度生产文件，100% 封闭水密，供 3D 打印直接使用 |
+| `.glb` | 轻量预览格式，Three.js 实时交互与切面预览 |
+| `.usagi` | 作品包（数据格式，不执行附带脚本） |
+
+打印准备台集成官方 Bambu Studio CLI 执行**真实切片**，生成 `.gcode.3mf`，精确获取层数、耗材克数与打印时长；支持拓竹 A1 mini 云协议直传实机与实时监控（需在家长设置绑定设备），并保留家长检查清单与密码确认。
+
+## 🤝 参与贡献
+
+代码、灵感点子、界面文案、模型模板与教程都欢迎！先读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解环境搭建、测试命令与项目约定，孩子的参数与模板入口设计见[系统设计规范](docs/呀哈造物系统详细设计规范.md)。造物桌质量问题根因与修复记录见 [造物桌质量调试记录](docs/造物桌质量调试记录.md)。
+
+## 📄 许可证
+
+- **代码与文档**：[MIT License](LICENSE)
+- **美术素材**（`public/art/usagi`、`docs/images`）：[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)，详见 [NOTICE.md](NOTICE.md)
+
+> ⚠️ “乌萨奇”角色形象与《ちいかわ》中的乌萨奇高度相似，素材为 AI 生成的非商业二创。计划商业发行前请评估角色版权风险，或替换为原创吉祥物（见 [NOTICE.md](NOTICE.md)）。
