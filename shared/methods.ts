@@ -14,6 +14,8 @@ export const publicMethods = new Set([
   'asset.upload',
   'asset.delete',
   'asset.list',
+  'materials.get',
+  'materials.save',
   'idea.interpret',
   'idea.adjustment',
   'idea.converse',

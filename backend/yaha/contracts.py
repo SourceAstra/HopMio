@@ -45,21 +45,79 @@ class DesignSpec(BaseModel):
         if not isinstance(value, dict):
             return value
         data = dict(value)
-        if data.get("schema_version", 1) < 3:
-            plan = data.get("modeling_plan")
-            if plan and plan.get("schema_version") == 1:
-                data["modeling_plan"] = None
-            if data.get("provider", "local") not in ("local", "parametric", "reconstruction"):
-                data["provider"] = "parametric"
-            data["schema_version"] = 3
-        if data.get("schema_version", 1) in (1, 2, 3, 4):
-            data["schema_version"] = 5
+
+        # 1. 严格白名单投影：仅允许模型声明的合法几何字段，从根本上免疫任何外来/业务字段引发的 extra_forbidden
+        allowed = set(cls.model_fields.keys())
+        data = {k: v for k, v in data.items() if k in allowed}
+
+        # 2. 模式与 Provider 自动自愈纠偏
+        mode_val = str(data.get("mode", "text")).strip().lower()
+        if mode_val in [m.value for m in Mode]:
+            data["mode"] = Mode(mode_val)
+        else:
+            data["mode"] = Mode.TEXT
+
+        provider_val = str(data.get("provider", "parametric")).strip().lower()
+        if provider_val not in ("local", "parametric", "reconstruction"):
+            provider_val = "parametric"
+        if data["mode"] not in (Mode.IMAGE, Mode.MULTIVIEW) and provider_val == "reconstruction":
+            provider_val = "parametric"
+        data["provider"] = provider_val
+
+        # 3. 枚举与布尔值自愈
+        policy_val = str(data.get("photo_policy", "auto")).strip().lower()
+        data["photo_policy"] = policy_val if policy_val in ("auto", "parameters", "surface") else "auto"
+
+        hole_shape = str(data.get("hole_shape", "round")).strip().lower()
+        data["hole_shape"] = hole_shape if hole_shape in ("round", "heart") else "round"
+
+        relief_kind = str(data.get("relief_kind", "relief")).strip().lower()
+        data["relief_kind"] = relief_kind if relief_kind in ("relief", "lithophane") else "relief"
+
+        if "base" in data:
+            data["base"] = bool(data["base"])
+        if "hole" in data:
+            data["hole"] = bool(data["hole"])
+
+        # 4. 字符串与列表边界防护截断
+        if "prompt" in data:
+            data["prompt"] = str(data["prompt"])[:3000]
+        if "template" in data:
+            data["template"] = str(data["template"])[:50] or "usagi"
+        if "asset_ids" in data:
+            data["asset_ids"] = [str(x) for x in data["asset_ids"] if isinstance(x, (str, int))][:96] if isinstance(data["asset_ids"], list) else []
+        if "assumptions" in data:
+            data["assumptions"] = [str(x)[:200] for x in data["assumptions"] if isinstance(x, (str, int))][:20] if isinstance(data["assumptions"], list) else []
+
+        # 5. 关键物理尺寸边界安全钳制（Auto-clamp），杜绝异常中断
+        def _clamp(v, low, high, default):
+            try:
+                num = float(v)
+                return max(low, min(high, num))
+            except (TypeError, ValueError):
+                return default
+
+        if "height_mm" in data:
+            data["height_mm"] = _clamp(data["height_mm"], 0.8, 500.0, 80.0)
+        if "width_mm" in data:
+            data["width_mm"] = _clamp(data["width_mm"], 0.8, 500.0, 48.0)
+        if "depth_mm" in data:
+            data["depth_mm"] = _clamp(data["depth_mm"], 0.8, 500.0, 36.0)
+        if "thickness_mm" in data:
+            data["thickness_mm"] = _clamp(data["thickness_mm"], 0.8, 20.0, 3.0)
+        if "bottom_mm" in data:
+            data["bottom_mm"] = _clamp(data["bottom_mm"], 0.8, 20.0, 4.0)
+        if "ear_scale" in data:
+            data["ear_scale"] = _clamp(data["ear_scale"], 0.7, 2.0, 1.2)
+
+        # 6. Schema 版本升迁
+        data["schema_version"] = 5
         return data
 
     @model_validator(mode="after")
     def input_budget(self):
         if self.provider == "reconstruction" and self.mode not in (Mode.IMAGE, Mode.MULTIVIEW):
-            raise ValueError("表面重建需要照片模式")
+            self.provider = "parametric"
         return self
 
 
@@ -70,6 +128,7 @@ class ModelAdjustment(BaseModel):
     target_part_id: str | None = Field(default=None, pattern=r"^[a-zA-Z][a-zA-Z0-9_]{0,47}$")
     location_asset_id: str | None = Field(default=None, max_length=80)
     location_point: tuple[Annotated[float, Field(ge=0, le=100)], Annotated[float, Field(ge=0, le=100)]] | None = None
+    location_point_mm: tuple[Annotated[float, Field(ge=-2000, le=2000)], Annotated[float, Field(ge=-2000, le=2000)], Annotated[float, Field(ge=-2000, le=2000)]] | None = None
 
     @model_validator(mode="after")
     def validate_location(self):

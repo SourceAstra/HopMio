@@ -67,6 +67,9 @@ def export_project(project, assets, format):
         for index, identifier in enumerate(project["spec"].get("asset_ids", [])):
             original = assets.path(identifier)
             files[f"inputs/{index}{original.suffix}"] = original.read_bytes()
+        source_mesh = (project["spec"].get("modeling_plan") or {}).get("source_mesh")
+        if source_mesh:
+            files["edit-source.stl"] = assets.path(source_mesh["asset_id"]).read_bytes()
         report = project.get("slicing")
         if report and report["revision_id"] == project["revision_id"]:
             files["print.gcode.3mf"] = assets.path(report["asset_id"]).read_bytes()
@@ -76,7 +79,7 @@ def export_project(project, assets, format):
                 "project.json",
                 json.dumps(
                     {
-                        "schema_version": 3,
+                        "schema_version": 4,
                         "name": project["name"],
                         "spec": project["spec"],
                         "story": project["story"],

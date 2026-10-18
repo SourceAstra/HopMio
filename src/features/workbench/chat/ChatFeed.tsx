@@ -14,6 +14,7 @@ interface ChatFeedProps {
   isBusy: boolean;
   busyMessage?: string;
   reviewAvailable?: boolean;
+  quickHints?: Array<{ label: string; prompt: string }>;
 }
 
 export function ChatFeed({
@@ -26,6 +27,7 @@ export function ChatFeed({
   isBusy,
   busyMessage,
   reviewAvailable = true,
+  quickHints,
 }: ChatFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -51,30 +53,45 @@ export function ChatFeed({
                 <p className="bubble-text">{msg.content}</p>
                 {onSelectQuickPrompt && messages.length <= 1 && (
                   <div className="welcome-hints">
-                    <span className="hints-label">试着喊出：</span>
+                    <span className="hints-label">试着喊出或选择：</span>
                     <div className="hints-chips">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onSelectQuickPrompt('乌萨奇同款胡萝卜印章，底部平整带抓握手柄')
-                        }
-                      >
-                        🥕 胡萝卜手办印章
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onSelectQuickPrompt('乌萨奇元气桌面立牌，高 80mm 自带稳固底座')
-                        }
-                      >
-                        ✦ 80mm 元气立牌
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onSelectQuickPrompt('圆滚滚胖嘟嘟的呆萌绿色小恐龙桌面摆件')}
-                      >
-                        🦖 呆萌小恐龙
-                      </button>
+                      {quickHints && quickHints.length > 0 ? (
+                        quickHints.map((hint, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => onSelectQuickPrompt(hint.prompt)}
+                            title={hint.prompt}
+                          >
+                            {hint.label}
+                          </button>
+                        ))
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSelectQuickPrompt('乌萨奇同款胡萝卜印章，底部平整带抓握手柄')
+                            }
+                          >
+                            🥕 胡萝卜手办印章
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onSelectQuickPrompt('乌萨奇元气桌面立牌，高 80mm 自带稳固底座')
+                            }
+                          >
+                            ✦ 80mm 元气立牌
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onSelectQuickPrompt('圆滚滚胖嘟嘟的呆萌绿色小恐龙桌面摆件')}
+                          >
+                            🦖 呆萌小恐龙
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -259,9 +276,15 @@ export function ChatFeed({
                 <div className="bubble-header">
                   <div className="bubble-title-group">
                     <Sparkles size={13} className="sparkle-gold" />
-                    <strong>乌萨奇的智能整理建议</strong>
+                    <strong>
+                      {org.is_new_project
+                        ? `新作品建议 · ${org.title || '全新设计'}`
+                        : '乌萨奇的智能整理建议'}
+                    </strong>
                   </div>
-                  <span className="organize-pill">✦ 整理就绪</span>
+                  <span className="organize-pill">
+                    {org.is_new_project ? '✦ 新作品' : '✦ 整理就绪'}
+                  </span>
                 </div>
 
                 <div className="organize-tags-grid">
@@ -317,9 +340,9 @@ export function ChatFeed({
                       className="org-btn-confirm"
                       disabled={isBusy || org.superseded}
                       onClick={() => onConfirmOrganize(org)}
-                      title="确认整理结果，启动管线生成 3D 模型"
+                      title={org.is_new_project ? '开启独立新作品并启动管线生成 3D 模型' : '确认整理结果，启动管线生成 3D 模型'}
                     >
-                      <Sparkles size={13} /> {org.superseded ? '请确认后续方案' : '立即开始造物'}
+                      <Sparkles size={13} /> {org.superseded ? '请确认后续方案' : org.is_new_project ? '✦ 开启新作品造物' : '立即开始造物'}
                     </button>
                   )}
                 </div>

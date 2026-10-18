@@ -2,6 +2,7 @@ import { Modal } from '../../components/Modal';
 import { useStudio } from '../../state/StudioContext';
 import { ParameterEditor } from './ParameterEditor';
 import { ProviderChoice } from './ProviderChoice';
+import { patchDimensions } from './dimensions';
 
 export function ShapeDetails({ onClose }: { onClose: () => void }) {
   const s = useStudio();
@@ -30,15 +31,15 @@ export function ShapeDetails({ onClose }: { onClose: () => void }) {
                   const val = e.target.value;
                   const num = parseInt(val, 10);
                   if (!isNaN(num) && num > 0) {
-                    s.setSpec((old) => ({ ...old, height_mm: num }));
+                    s.setSpec((old) => patchDimensions(old, { height_mm: num }));
                   }
                 }}
                 onBlur={(e) => {
                   const num = parseInt(e.target.value, 10);
                   if (isNaN(num) || num < 10) {
-                    s.setSpec((old) => ({ ...old, height_mm: 10 }));
+                    s.setSpec((old) => patchDimensions(old, { height_mm: 10 }));
                   } else if (num > 500) {
-                    s.setSpec((old) => ({ ...old, height_mm: 500 }));
+                    s.setSpec((old) => patchDimensions(old, { height_mm: 500 }));
                   }
                 }}
               />

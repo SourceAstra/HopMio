@@ -60,8 +60,7 @@ class Jobs:
 
     def start(self, kind, project_id, work, metadata=None):
         with self.lock:
-            if len(self.events) >= 8:
-                raise DomainError("造物任务队列已满，请等待或停止已有任务。", "JOB_BUSY")
+            self.require_idle()
             identifier = str(uuid.uuid4())
             job = {
                 **(metadata or {}),
@@ -79,6 +78,11 @@ class Jobs:
             self.executor.submit(self.run, identifier, work)
             return job
 
+    def require_idle(self):
+        with self.lock:
+            if self.events:
+                raise DomainError("已有造物任务正在进行，请返回继续，或停止后再开始。", "JOB_BUSY")
+
     def run(self, identifier, work):
         ctx = JobContext(self, identifier)
         try:
@@ -90,14 +94,17 @@ class Jobs:
                 status="succeeded", progress=100, message=(result.get("completion") or {}).get("message", "作品做好啦！"), result=result
             )
         except Exception as error:
+            import traceback
+            traceback.print_exc()
             ctx.record(
                 status="canceled"
                 if getattr(error, "code", "") == "CANCELED"
                 else "failed",
                 message=str(error)
                 if isinstance(error, DomainError)
-                else "这次造物遇到问题，请检查材料或参数后重试。",
+                else f"这次造物遇到问题（{error}），请检查材料或参数后重试。",
                 error_code=getattr(error, "code", "ENGINE_ERROR"),
+                traceback=traceback.format_exc(),
             )
         finally:
             with self.lock:

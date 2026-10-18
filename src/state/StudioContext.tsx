@@ -5,16 +5,34 @@ import type {
   Bootstrap,
   Job,
   ModelAdjustment,
+  MaterialLibrary,
   Preferences,
   Profile,
   Project,
   Spec,
 } from '../types';
 import type { Room } from '../theme/rooms';
-import { defaultSpec, editableSpec, isPhotoMode } from '../theme/modes';
+import { defaultSpec, editableSpec, isPhotoMode, providerForMode } from '../theme/modes';
 import { hasCurrentPlan } from '../features/modeling/plan';
 import { dataSnapshot } from '../utils/dataSnapshot';
 import { printingReadiness } from '../features/printing/readiness';
+import type { Mode } from '../types';
+import { activeJobs, isActiveJob, stopJob } from './jobs';
+import { isImageAsset, loadCustomFolders, loadAssetFolderMap } from '../features/materials/folders';
+
+export interface NewProjectOptions {
+  mode?: Mode;
+  asset_ids?: string[];
+  prompt?: string;
+  defaultName?: string;
+}
+
+export interface JobConflictState {
+  isOpen: boolean;
+  actionTitle: string;
+  taskCount: number;
+  onConfirm: () => Promise<void> | void;
+}
 
 function useStudioState() {
   const [room, setRoom] = useState<Room>('hall');
@@ -22,6 +40,33 @@ function useStudioState() {
   const [project, setProject] = useState<Project | null>(null);
   const [spec, setSpec] = useState<Spec>(defaultSpec);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [materialLibrary, setMaterialLibrary] = useState<MaterialLibrary>({
+    schema_version: 1,
+    version: 0,
+    folders: [],
+    assignments: {},
+  });
+  const materialLibraryRef = useRef(materialLibrary);
+  const materialWrites = useRef(Promise.resolve());
+  const saveMaterials = (update: (current: MaterialLibrary) => MaterialLibrary) => {
+    const write = materialWrites.current.then(async () => {
+      try {
+        const result = await call<MaterialLibrary>(
+          'materials.save',
+          update(materialLibraryRef.current),
+        );
+        materialLibraryRef.current = result;
+        setMaterialLibrary(result);
+      } catch (error) {
+        const refreshed = await call<MaterialLibrary>('materials.get');
+        materialLibraryRef.current = refreshed;
+        setMaterialLibrary(refreshed);
+        throw error;
+      }
+    });
+    materialWrites.current = write.catch(() => {});
+    return write;
+  };
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [profile, setProfile] = useState<Profile>({
     machine: 'A1 mini',
@@ -30,10 +75,111 @@ function useStudioState() {
     material: 'PLA',
     margin_mm: 5,
   });
-  const [job, setJob] = useState<Job | null>(null);
+  const [job, setJobState] = useState<Job | null>(null);
+  const jobRef = useRef<Job | null>(null);
+  const setJob = (value: Job | null) => {
+    jobRef.current = value;
+    setJobState(value);
+  };
+  const busyCount = useRef(0);
+  const submitting = useRef(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [ready, setReady] = useState(false);
+  const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
+  const [newProjectOptions, setNewProjectOptions] = useState<NewProjectOptions | null>(null);
+  const [jobConflict, setJobConflict] = useState<JobConflictState | null>(null);
+
+  const openNewProject = async (options?: NewProjectOptions) => {
+    await executeWithJobCheck(() => {
+      setNewProjectOptions(options || null);
+      setNewProjectModalOpen(true);
+    });
+  };
+
+  const closeNewProject = () => {
+    setNewProjectModalOpen(false);
+    setNewProjectOptions(null);
+  };
+
+  const cancelCurrentJob = async () => {
+    const current = jobRef.current;
+    if (!current) return true;
+    const result = await act(async () => {
+      setNotice('正在停止当前任务…');
+      const stopped = await stopJob(current.id);
+      if (jobRef.current?.id === stopped.id) setJob(stopped);
+      if (stopped.result?.project && currentId.current === stopped.project_id)
+        adopt(stopped.result.project);
+      await refresh();
+      setNotice(
+        stopped.status === 'succeeded'
+          ? '任务已先完成，结果已保存。'
+          : '当前任务已停止，已保存版本保留。',
+      );
+      return true;
+    });
+    return result === true;
+  };
+  const continueCurrentJob = async () => {
+    const current = jobRef.current;
+    await act(async () => {
+      if (current) {
+        const owner = await call<Project>('project.get', { id: current.project_id });
+        adopt(owner);
+        if (current.spec && current.base_revision_id === owner.revision_id)
+          setSpec(current.prepared_spec || current.spec);
+      }
+      setJobConflict(null);
+      closeNewProject();
+      setRoom('desk');
+    });
+  };
+
+  const executeWithJobCheck = async (
+    action: () => Promise<void> | void,
+    actionTitle = '开启新造物',
+  ): Promise<boolean> => {
+    if (submitting.current) return false;
+    submitting.current = true;
+    try {
+      const runningJobs = await activeJobs();
+      if (runningJobs.length) {
+        setJob(runningJobs[0]);
+        setJobConflict({
+          isOpen: true,
+          actionTitle,
+          taskCount: runningJobs.length,
+          onConfirm: async () => {
+            if (submitting.current) return;
+            submitting.current = true;
+            try {
+              for (const running of runningJobs) {
+                setJob(running);
+                if (!(await cancelCurrentJob())) return;
+              }
+              if ((await activeJobs()).length)
+                throw new Error('检测到新的后台任务，请重新选择继续或停止。');
+              setJobConflict(null);
+              await action();
+            } catch (error) {
+              setNotice((error as Error).message);
+            } finally {
+              submitting.current = false;
+            }
+          },
+        });
+        return false;
+      }
+      await action();
+      return true;
+    } catch (error) {
+      setNotice((error as Error).message);
+      return false;
+    } finally {
+      submitting.current = false;
+    }
+  };
   const currentId = useRef<string | null>(null);
   const currentRevision = useRef<string | null>(null);
   const currentSpec = useRef(spec);
@@ -54,21 +200,26 @@ function useStudioState() {
     return list;
   };
   const act = async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
+    busyCount.current++;
     setBusy(true);
     try {
       return await work();
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
-      setBusy(false);
+      busyCount.current--;
+      setBusy(busyCount.current > 0);
     }
   };
   useEffect(() => {
     void act(async () => {
       const data = await call<Bootstrap>('bootstrap');
       setProjects(data.projects);
-      if (data.projects[0]) {
-        const project = data.projects[0];
+      const active = data.jobs.find(isActiveJob);
+      const initial =
+        data.projects.find((item) => item.id === active?.project_id) || data.projects[0];
+      if (initial) {
+        const project = initial;
         adopt(project);
         const latest = data.jobs
           .filter((item) => item.project_id === project.id)
@@ -96,20 +247,76 @@ function useStudioState() {
         }
       }
       setAssets(data.assets);
+      let library = data.material_library || {
+        schema_version: 1 as const,
+        version: 0,
+        folders: [],
+        assignments: {},
+      };
+      if (
+        library.version === 0 &&
+        (loadCustomFolders().length || Object.keys(loadAssetFolderMap()).length)
+      ) {
+        try {
+          library = await call<MaterialLibrary>('materials.save', {
+            ...library,
+            folders: loadCustomFolders(),
+            assignments: loadAssetFolderMap(),
+          });
+        } catch (error) {
+          setNotice(`旧素材目录暂未迁移：${(error as Error).message}`);
+        }
+      }
+      materialLibraryRef.current = library;
+      setMaterialLibrary(library);
       setPreferences(data.settings);
       setProfile(data.profile);
       setReady(true);
     });
   }, []);
   useEffect(() => {
+    if (!preferences) return;
+    const previous = {
+      light: document.body.classList.contains('theme-light'),
+      dark: document.body.classList.contains('theme-dark'),
+    };
+    const light = ['light', 'sunshine'].includes(preferences.theme);
+    document.body.classList.toggle('theme-light', light);
+    document.body.classList.toggle('theme-dark', !light);
+    return () => {
+      document.body.classList.toggle('theme-light', previous.light);
+      document.body.classList.toggle('theme-dark', previous.dark);
+    };
+  }, [preferences?.theme]);
+  useEffect(() => {
+    if (!ready) return;
+    let disposed = false;
+    const timer = setInterval(async () => {
+      if (isActiveJob(jobRef.current)) return;
+      try {
+        const jobs = await activeJobs();
+        if (!disposed && jobs[0] && !isActiveJob(jobRef.current)) setJob(jobs[0]);
+      } catch {
+        // 当前任务 ID 由独立轮询保留；下次继续发现其他标签页的任务。
+      }
+    }, 2500);
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+    };
+  }, [ready]);
+  useEffect(() => {
     if (!job || !['queued', 'running'].includes(job.status)) return;
     if (jobView.current?.id !== job.id)
       jobView.current = { id: job.id, spec: dataSnapshot(currentSpec.current) };
     let canceled = false;
+    let polling = false;
     const timer = setInterval(async () => {
+      if (polling) return;
+      polling = true;
       try {
         const update = await call<Job>('job.get', { id: job.id });
-        if (canceled) return;
+        if (canceled || jobRef.current?.id !== job.id) return;
         setJob(update);
         if (update.status === 'succeeded') {
           if (update.result?.spec) {
@@ -157,8 +364,9 @@ function useStudioState() {
       } catch (e) {
         if (!canceled) {
           setNotice((e as Error).message);
-          setJob(null);
         }
+      } finally {
+        polling = false;
       }
     }, 1000);
     return () => {
@@ -174,6 +382,7 @@ function useStudioState() {
       });
       adopt(p);
       setRoom('desk');
+      return p;
     });
   const updateProject = async (
     id: string,
@@ -236,45 +445,66 @@ function useStudioState() {
   const deleteAsset = async (id: string) =>
     act(async () => {
       await call('asset.delete', { id });
-      setAssets((old) => old.filter((a) => a.id !== id));
-      setSpec((old) => ({
-        ...old,
-        asset_ids: old.asset_ids.filter((aid) => aid !== id),
-      }));
-      setNotice('素材已从素材架移除。');
+      setAssets((old) =>
+        old.map((asset) => (asset.id === id ? { ...asset, archived: true } : asset)),
+      );
+      setNotice('素材已从素材架移除，作品与历史版本的引用保留。');
     });
-  const generate = async (adjustment?: ModelAdjustment, requestSpec = spec) =>
-    act(async () => {
-      if (!project) return;
-      const snapshot = dataSnapshot(spec);
-      const hasPhotos = requestSpec.asset_ids.length > 0;
-      const targetMode = hasPhotos
-        ? ['silhouette', 'relief', 'image', 'multiview'].includes(requestSpec.mode)
-          ? requestSpec.mode
-          : requestSpec.asset_ids.length > 1
-            ? 'multiview'
-            : 'image'
-        : requestSpec.mode;
-      const effectiveSpec = {
-        ...requestSpec,
-        mode: targetMode,
-      };
-      const j = await call<Job>(adjustment ? 'model.adjust' : 'model.generate', {
-        id: project.id,
-        spec: effectiveSpec,
-        auto_photo: !adjustment && (isPhotoMode(effectiveSpec.mode) || hasPhotos),
-        ...(adjustment && { adjustment }),
-      });
-      if (
-        j.spec &&
-        currentId.current === project.id &&
-        currentRevision.current === j.base_revision_id &&
-        dataSnapshot(currentSpec.current) === snapshot
-      )
-        setSpec(j.spec);
-      setJob(j);
-      return j;
-    });
+  const generate = async (
+    adjustment?: ModelAdjustment,
+    requestSpec = spec,
+    targetProjectId?: string,
+  ) => {
+    let submitted: Job | undefined;
+    const activeId = targetProjectId || currentId.current || project?.id;
+    const baseRevision = currentRevision.current;
+    await executeWithJobCheck(
+      async () => {
+        submitted = await act(async () => {
+          if (!activeId) return;
+          const snapshot = dataSnapshot(requestSpec);
+          const hasPhotos = requestSpec.asset_ids.some((id) =>
+            isImageAsset(assets.find((asset) => asset.id === id)),
+          );
+          const targetMode =
+            hasPhotos && requestSpec.mode !== 'import'
+              ? ['silhouette', 'relief', 'image', 'multiview'].includes(requestSpec.mode)
+                ? requestSpec.mode
+                : requestSpec.asset_ids.length > 1
+                  ? 'multiview'
+                  : 'image'
+              : requestSpec.mode;
+          const effectiveSpec = {
+            ...requestSpec,
+            mode: targetMode,
+            provider:
+              adjustment || requestSpec.modeling_plan?.source_mesh
+                ? requestSpec.provider
+                : providerForMode(targetMode, requestSpec.provider),
+          };
+          const j = await call<Job>(adjustment ? 'model.adjust' : 'model.generate', {
+            id: activeId,
+            base_revision_id: baseRevision,
+            spec: effectiveSpec,
+            auto_photo: !adjustment && (isPhotoMode(effectiveSpec.mode) || hasPhotos),
+            ...(adjustment && { adjustment }),
+          });
+          if (
+            !adjustment &&
+            j.spec &&
+            currentId.current === activeId &&
+            currentRevision.current === j.base_revision_id &&
+            dataSnapshot(currentSpec.current) === snapshot
+          )
+            setSpec(j.spec);
+          setJob(j);
+          return j;
+        });
+      },
+      adjustment ? '执行局部微调' : '开始 3D 建模',
+    );
+    return submitted;
+  };
   const organizeIdea = async (
     overridePrompt?: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
@@ -314,14 +544,18 @@ function useStudioState() {
       );
       return updatedSpec;
     });
-  const design = async () =>
-    act(async () => {
-      if (!project) return;
-      const snapshot = dataSnapshot(spec);
-      const j = await call<Job>('model.plan', { id: project.id, spec });
-      pendingPlan.current = { id: j.id, spec: snapshot };
-      setJob(j);
-    });
+  const design = async (requestSpec = spec) =>
+    executeWithJobCheck(
+      () =>
+        act(async () => {
+          if (!project) return;
+          const snapshot = dataSnapshot(requestSpec);
+          const j = await call<Job>('model.plan', { id: project.id, spec: requestSpec });
+          pendingPlan.current = { id: j.id, spec: snapshot };
+          setJob(j);
+        }).then(() => {}),
+      '重新设计方案',
+    );
   const check = async () =>
     act(async () => {
       if (!project) return;
@@ -330,10 +564,14 @@ function useStudioState() {
       setRoom('check');
     });
   const slice = async () =>
-    act(async () => {
-      if (!project) return;
-      setJob(await call<Job>('model.slice', { id: project.id, profile }));
-    });
+    executeWithJobCheck(
+      () =>
+        act(async () => {
+          if (!project) return;
+          setJob(await call<Job>('model.slice', { id: project.id, profile }));
+        }).then(() => {}),
+      '开始切片',
+    );
   const dirty = !!project && dataSnapshot(spec) !== dataSnapshot(project.spec);
   const running = !!job && ['queued', 'running'].includes(job.status);
   const printReadiness = printingReadiness(project, profile, dirty, busy, running);
@@ -346,7 +584,27 @@ function useStudioState() {
     !dirty;
   const blenderReady = preferences ? !!preferences.blender?.available : true;
   const hasPhotos = spec.asset_ids.length > 0;
-  const canGenerate = blenderReady && (hasPhotos ? true : spec.mode === 'text' ? true : false);
+  const scanRequested =
+    isPhotoMode(spec.mode) &&
+    !spec.modeling_plan?.source_mesh &&
+    (spec.photo_policy === 'surface' ||
+      (spec.photo_policy !== 'parameters' &&
+        spec.asset_ids.length >= (preferences?.reconstruction?.min_photos || 3)));
+  const needsPlan = !scanRequested && spec.provider === 'parametric' && !hasCurrentPlan(spec);
+  const generationBlock = !blenderReady
+    ? '请先在家长设置配置本地 Blender。'
+    : !hasPhotos && !spec.modeling_plan?.source_mesh && spec.mode !== 'text'
+      ? '请先选择当前方式所需的素材。'
+      : scanRequested && spec.asset_ids.length < (preferences?.reconstruction?.min_photos || 3)
+        ? `请补充至少 ${preferences?.reconstruction?.min_photos || 3} 张同一物体的重叠视角照片。`
+        : scanRequested && !preferences?.reconstruction?.available
+          ? '实物重建引擎未就绪，请在家长设置查看配置。'
+          : needsPlan && (!preferences?.cloud_enabled || !preferences?.chat_configured)
+            ? '请先配置并开启 AI 服务，或选择本地模板造物。'
+            : needsPlan && isPhotoMode(spec.mode) && !preferences?.chat_supports_images
+              ? '照片参考设计需要支持图片输入的 AI 模型。'
+              : '';
+  const canGenerate = !generationBlock;
   return {
     room,
     setRoom,
@@ -356,6 +614,8 @@ function useStudioState() {
     setSpec,
     assets,
     setAssets,
+    materialLibrary,
+    saveMaterials,
     preferences,
     setPreferences,
     profile,
@@ -370,6 +630,10 @@ function useStudioState() {
     refresh,
     act,
     create,
+    openNewProject,
+    closeNewProject,
+    newProjectModalOpen,
+    newProjectOptions,
     updateProject,
     deleteProject,
     deleteRevision,
@@ -386,6 +650,12 @@ function useStudioState() {
     canPrepare,
     printReadiness,
     canGenerate,
+    generationBlock,
+    jobConflict,
+    setJobConflict,
+    cancelCurrentJob,
+    continueCurrentJob,
+    executeWithJobCheck,
     running: !!job && ['queued', 'running'].includes(job.status),
   };
 }

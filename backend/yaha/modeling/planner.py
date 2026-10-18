@@ -46,19 +46,31 @@ class CloudModelingPlanner:
     def _design(self, spec, images, observer=None, *, review=False, adjustment=None, model_view_count=0, location_image_count=0, feedback=None, deadline=None, correction=None):
         for attempt in range(2):
             instruction, prompt = render_prompts(spec, correction, review=review, adjustment=adjustment, model_view_count=model_view_count, location_image_count=location_image_count, reference_image_count=len(images) - model_view_count - location_image_count, feedback=feedback)
-            data = self.client.complete(instruction, prompt, images, observer, **({"deadline": deadline} if deadline is not None else {}))
+            try:
+                data = self.client.complete(instruction, prompt, images, observer, **({"deadline": deadline} if deadline is not None else {}))
+            except DomainError as error:
+                if not attempt and error.code in ("AI_RESPONSE", "AI_OUTPUT_LIMIT"):
+                    correction = {
+                        "error": str(error) + " 请务必只输出严格合法的完整闭合 JSON 对象，符合 Schema 规范，严禁遗漏括号或输出截断。" + (" 本次局部调整请求：" + adjustment if adjustment else ""),
+                        "plan": json.dumps(spec.modeling_plan.model_dump(), ensure_ascii=False) if spec.modeling_plan else "{}",
+                    }
+                    continue
+                raise
             if observer:
                 observer({"phase": "validating", "plan_draft": data, "attempt": attempt + 1})
             try:
-                if data.get("schema_version") != 6:
+                if data.get("schema_version") not in (6, 7):
                     raise DomainError("新方案必须使用 schema_version=6，所有部件显式填写 coordinate_origin；旧版本仅用于读取历史作品。", "PLAN_COORDINATES")
                 plan = GeometryPlan.model_validate(data)
+                from .mesh_editing import require_source
+                if spec.modeling_plan:
+                    require_source(spec.modeling_plan, plan)
                 if any(view.photo_index >= len(spec.asset_ids) for view in plan.reference_views):
                     raise DomainError("照片视角序号超出本次材料范围。", "AI_PLAN_INVALID")
                 if spec.asset_ids and plan.surface and any(step.id == "base" for step in plan.steps):
                     raise DomainError("参考曲面的底座由执行器按用户选项添加；删除 id=base 的步骤，从主体开始，删除无用底座参数与推测。", "AI_PLAN_INVALID")
                 if spec.modeling_plan:
-                    references = json.dumps({"steps": [step.model_dump() for step in plan.steps], "surface": plan.surface.model_dump() if plan.surface else None}, ensure_ascii=False)
+                    references = json.dumps({"steps": [step.model_dump() for step in plan.steps], "surface": plan.surface.model_dump() if plan.surface else None, "source_mesh": plan.source_mesh.model_dump() if plan.source_mesh else None}, ensure_ascii=False)
                     for name, parameter in spec.modeling_plan.parameters.items():
                         if parameter.locked:
                             if name not in plan.parameters or json.dumps({"parameter": name})[1:-1] not in references:
@@ -84,6 +96,8 @@ class CloudModelingPlanner:
                 if attempt:
                     raise DomainError(message, error.code if isinstance(error, DomainError) and error.code == "AI_ADJUSTMENT_UNCHANGED" else "AI_PLAN_INVALID") from None
                 correction = {"error": message + (" 本次局部调整请求：" + adjustment if adjustment else ""), "plan": json.dumps(data, ensure_ascii=False)}
+        from .contracts import PlanOptions
+        plan.source_options = PlanOptions(base=spec.base, hole=spec.hole, hole_shape=spec.hole_shape)
         plan.source_prompt = spec.prompt
         plan.source_asset_ids = list(spec.asset_ids)
         return plan
@@ -91,7 +105,8 @@ class CloudModelingPlanner:
 
 def current_plan(spec):
     plan = spec.modeling_plan
-    return bool(plan and plan.source_prompt == spec.prompt and plan.source_asset_ids == spec.asset_ids)
+    options_match = not plan or plan.source_mesh or not plan.source_options or plan.source_options.model_dump() == {"base": spec.base, "hole": spec.hole, "hole_shape": spec.hole_shape}
+    return bool(plan and plan.source_prompt == spec.prompt and plan.source_asset_ids == spec.asset_ids and options_match)
 
 
 def design_plan(service, spec, job, *, correction=None):
@@ -122,6 +137,9 @@ def apply_plan(service, spec, plan, job):
     spec.provider = "parametric"
     spec.schema_version = DesignSpec.model_fields["schema_version"].default
     spec.modeling_plan = plan
+    height = next((rule["expected_mm"] for rule in compile_plan(plan)["constraints"] if rule["feature"] == "model.height"), None)
+    if height is not None:
+        spec.height_mm = height
     spec.assumptions = list(plan.assumptions)
     job.record(prepared_spec=spec.model_dump())
     return plan

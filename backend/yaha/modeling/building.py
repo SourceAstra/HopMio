@@ -24,10 +24,14 @@ def build_with_correction(service, spec, job, **options):
     try:
         return build_model(service, spec, job, **options)
     except DomainError as error:
-        if spec.provider != "parametric" or spec.mode != Mode.TEXT or options.get("repair") or options.get("adjustment_intent") or error.code not in ("BLENDER_GEOMETRY", "BLENDER_DIMENSION", "BLENDER_EXECUTION"):
+        if spec.provider != "parametric" or options.get("repair") or error.code not in ("BLENDER_GEOMETRY", "BLENDER_DIMENSION", "BLENDER_EXECUTION"):
             raise
         from .planner import design_plan
-        correction = {"error": str(error), "plan": json.dumps(spec.modeling_plan.model_dump(), ensure_ascii=False)}
+        err_msg = str(error)
+        adj = options.get("adjustment_intent")
+        if adj:
+            err_msg += f" (本次微调要求：{adj})"
+        correction = {"error": err_msg, "plan": json.dumps(spec.modeling_plan.model_dump(), ensure_ascii=False)}
         job.record(modeling_correction={"attempt": 1, "code": error.code, "message": str(error), "plan": spec.modeling_plan.model_dump()})
         job.progress(5, "根据实际网格复测修正部件连接与尺寸")
         job.check()

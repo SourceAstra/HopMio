@@ -35,6 +35,9 @@ def render_prompts(spec, correction=None, *, review=False, adjustment=None, mode
             "review_feedback": json.dumps(feedback or {}, ensure_ascii=False),
             "assessment_schema": json.dumps(assessment_schema, ensure_ascii=False),
         }
+        if spec.modeling_plan and spec.modeling_plan.source_mesh:
+            context["description"] += "\n当前为原网格编辑：输出 schema_version=7，原样保留 source_mesh.asset_id/sha256，以该真实网格为主体；steps 仅添加必要的局部工具，可从 subtract 开始。不得用基本几何重新拼出主体，surface 必须为 null。source_mesh.scale 只在明确要求整体缩放时更改；未要求改变的原工具与尺寸须保留。工具使用原制造 STL 的坐标：毫米、Z向上、底面Z=0。"
+            context["adjustment"] += "\n必须保留现有 source_mesh 身份，使用 v7 网格编辑；不得替换主体或全局重塑。"
         if correction:
             context.update(correction)
             return Template(data["system_prompt"]).substitute(context), Template(data["repair_prompt"]).substitute(context)

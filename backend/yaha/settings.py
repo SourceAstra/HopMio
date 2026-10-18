@@ -150,14 +150,47 @@ class Settings:
         return vals | {
             "models": models,
             "pin_set": bool(self.db.get("settings", "guardian")),
+            "print_pin_set": bool(self.db.get("settings", "print_guardian")),
             "chat_configured": bool(self.key("chat")),
             "chat_registry_configured": bool(self.imported_model),
             "chat_supports_images": vals.get("chat_supports_images", True),
         }
 
-    def unlock(self, pin):
-        if not isinstance(pin, str) or not pin.isdigit() or not 6 <= len(pin) <= 12:
-            raise DomainError("请使用 6 至 12 位家长数字口令。")
+    def has_print_pin(self) -> bool:
+        return bool(self.db.get("settings", "print_guardian"))
+
+    def set_print_pin(self, new_pin: str):
+        if not isinstance(new_pin, str) or not 6 <= len(new_pin) <= 32:
+            raise DomainError("打印密码长度需在 6 至 32 位之间（支持大小写字母、数字及符号）。")
+        salt = secrets.token_hex(16)
+        guard = {
+            "salt": salt,
+            "hash": hashlib.pbkdf2_hmac(
+                "sha256", new_pin.encode(), salt.encode(), 200000
+            ).hex(),
+        }
+        self.db.put("settings", "print_guardian", guard)
+        return {"print_pin_set": True}
+
+    def verify_print_pin(self, pin: str) -> bool:
+        if not isinstance(pin, str) or not 6 <= len(pin) <= 32:
+            raise DomainError("请使用 6 至 32 位打印密码。")
+        guard = self.db.get("settings", "print_guardian")
+        if not guard:
+            # 首次输入时自动设定为专属打印密码
+            self.set_print_pin(pin)
+            return True
+        digest = hashlib.pbkdf2_hmac(
+            "sha256", pin.encode(), guard["salt"].encode(), 200000
+        ).hex()
+        if not hmac.compare_digest(digest, guard["hash"]):
+            time.sleep(1)
+            raise DomainError("打印密码不正确，请重新输入。")
+        return True
+
+    def unlock(self, pin, new_pin=None):
+        if not isinstance(pin, str) or not 6 <= len(pin) <= 32:
+            raise DomainError("请使用 6 至 32 位家长密码（支持大小写字母、数字及符号）。")
         guard = self.db.get("settings", "guardian")
         if not guard:
             salt = secrets.token_hex(16)
@@ -173,7 +206,20 @@ class Settings:
         ).hex()
         if not hmac.compare_digest(digest, guard["hash"]):
             time.sleep(1)
-            raise DomainError("家长口令不正确。")
+            raise DomainError("原家长密码不正确，请重新输入。")
+
+        if new_pin is not None:
+            if not isinstance(new_pin, str) or not 6 <= len(new_pin) <= 32:
+                raise DomainError("新密码长度需在 6 至 32 位之间（支持大小写字母、数字及符号）。")
+            new_salt = secrets.token_hex(16)
+            new_guard = {
+                "salt": new_salt,
+                "hash": hashlib.pbkdf2_hmac(
+                    "sha256", new_pin.encode(), new_salt.encode(), 200000
+                ).hex(),
+            }
+            self.db.put("settings", "guardian", new_guard)
+
         token = secrets.token_urlsafe(32)
         self.tokens[token] = time.monotonic() + 600
         return {"token": token, "expires_in": 600}
@@ -181,10 +227,12 @@ class Settings:
     def require(self, token):
         if self.tokens.get(token, 0) < time.monotonic():
             raise DomainError(
-                "请先请家长解锁设置（解锁有效 10 分钟）。", "GUARDIAN_REQUIRED"
+                "请先输入家长密码解锁设置。", "GUARDIAN_REQUIRED"
             )
 
     def update(self, token, values):
+        if bool(self.db.get("settings", "guardian")):
+            self.require(token)
         prefs = self.values()
         if "daily_limit" in values:
             limit = values["daily_limit"]

@@ -1480,7 +1480,8 @@ body.theme-dark .asset-delete-btn:hover:not(:disabled) {
   gap: 24px;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 8px 12px 48px;
+  padding: 8px 16px 96px;
+  box-sizing: border-box;
 }
 
 .inspiration-heading-actions {
@@ -1647,6 +1648,46 @@ body.theme-dark .asset-delete-btn:hover:not(:disabled) {
 .cat-count {
   font-size: 11.5px;
   opacity: 0.85;
+}
+
+.inspiration-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.inspiration-select-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.2px solid #e8dbbe;
+  border-radius: 12px;
+  padding: 6px 10px;
+  transition: all 0.15s ease;
+}
+
+.inspiration-select-wrapper:focus-within {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.inspiration-select-wrapper .select-icon {
+  color: #ad7714;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.inspiration-category-select {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 750;
+  color: #4b3e24;
+  cursor: pointer;
+  padding-right: 4px;
 }
 
 .inspiration-search-box {
@@ -1947,5 +1988,384 @@ body.theme-dark .asset-delete-btn:hover:not(:disabled) {
   padding: 10px 22px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* 灵感卡片增强：小朋友创作高光与操作栏 */
+.custom-chest-card {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, #fffdf8 0%, #fffbf0 100%);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.08);
+}
+
+.chest-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chest-badge-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 1.5px 7px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+  letter-spacing: 0.2px;
+}
+
+.chest-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.inspiration-chest-card:hover .chest-card-actions {
+  opacity: 1;
+}
+
+.chest-action-btn {
+  background: #fbf7ee;
+  border: 1px solid #ebdcc4;
+  border-radius: 8px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #786542;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chest-action-btn:hover {
+  background: #ffffff;
+}
+
+.chest-action-btn.edit-btn:hover {
+  border-color: #f59e0b;
+  color: #d97706;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
+}
+
+.chest-action-btn.delete-btn:hover {
+  border-color: #ef4444;
+  color: #dc2626;
+  background: #fff5f5;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.2);
+}
+
+.inspiration-add-btn {
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3) !important;
+}
+
+/* 灵感录入与编辑弹窗 */
+.inspiration-editor-card {
+  max-width: 620px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.inspiration-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.editor-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.editor-form-row .flex-1 {
+  flex: 1;
+}
+
+.editor-form-row .emoji-field {
+  width: 80px;
+}
+
+.emoji-input-box {
+  text-align: center;
+  font-size: 22px;
+}
+
+.editor-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #4b3e24;
+}
+
+.required-star {
+  color: #ef4444;
+}
+
+.editor-label-with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.magic-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, #fffbee 0%, #feeebf 100%);
+  border: 1px solid #f6d895;
+  border-radius: 14px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #b45309;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.magic-prompt-btn:hover {
+  background: #f59e0b;
+  color: #ffffff;
+  border-color: #d97706;
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.25);
+}
+
+.editor-textarea {
+  width: 100%;
+  border: 1.5px solid #ebdcc4;
+  background: #fffdfa;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  color: #2b2207;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  min-height: 72px;
+  transition: all 0.15s;
+}
+
+.editor-textarea:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+  background: #ffffff;
+}
+
+.preset-emojis-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fbf7ee;
+  border: 1px solid #f0e3cc;
+  padding: 6px 10px;
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.preset-emojis-bar .bar-hint {
+  font-size: 11.5px;
+  color: #8c7853;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.preset-emojis-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.emoji-bubble-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 16px;
+  padding: 3px 5px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.emoji-bubble-btn:hover,
+.emoji-bubble-btn.active {
+  background: #ffffff;
+  border-color: #f59e0b;
+  transform: scale(1.18);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.18);
+}
+
+.category-select-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.category-pill-btn {
+  background: #fbf7ee;
+  border: 1px solid #ebdcc4;
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 750;
+  color: #5c4e33;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.category-pill-btn:hover {
+  background: #fff3d6;
+  border-color: #f59e0b;
+}
+
+.category-pill-btn.active {
+  background: #f59e0b;
+  border-color: #d97706;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.22);
+}
+
+.tag-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tag-input-box {
+  width: 100%;
+}
+
+.preset-tags-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag-chip-btn {
+  background: #fdfaf2;
+  border: 1px solid #e8dbbe;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #786542;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tag-chip-btn:hover,
+.tag-chip-btn.active {
+  background: #fff3d6;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
+.inspiration-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.inspiration-form-error {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #e11d48;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+/* 灵感删除确认卡 */
+.inspiration-delete-card {
+  max-width: 440px;
+}
+
+.delete-target-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff9ee;
+  border: 1px solid #fae8c8;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 12px 0 8px;
+}
+
+.target-emoji {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.target-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.target-title {
+  font-size: 14.5px;
+  font-weight: 850;
+  color: #2b2207;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.target-desc {
+  font-size: 12px;
+  color: #8c7853;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delete-confirm-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b45309;
+  margin: 0 0 16px;
+}
+
+.launch-btn-danger {
+  background: #ef4444;
+  border: 1px solid #dc2626;
+  color: #ffffff;
+  padding: 9px 18px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.launch-btn-danger:hover {
+  background: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
 

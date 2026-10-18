@@ -19,6 +19,8 @@ class Assets:
         self.root.mkdir(exist_ok=True)
 
     def write(self, content: bytes, extension: str, name: str, kind: str = "model", *, units=None):
+        if kind == "model" and extension in {".png", ".jpg", ".jpeg", ".webp"}:
+            kind = "image"
         limit = MAX_PACKAGE_BYTES if extension == ".usagi" else MAX_ASSET_BYTES
         if len(content) > limit:
             raise DomainError(f"文件超过 {limit // 1024 // 1024} MB，请先减少图片尺寸或模型面数。")
@@ -128,7 +130,7 @@ class Assets:
 
     def data_uri(self, identifier):
         asset = self.db.get("assets", identifier)
-        if not asset or asset["kind"] != "image":
+        if not asset or (asset.get("kind") != "image" and asset.get("extension") not in {".png", ".jpg", ".jpeg", ".webp"}):
             raise DomainError("请先选择一张照片或自己的画。")
         return (
             f"data:{asset['mime']};base64,"

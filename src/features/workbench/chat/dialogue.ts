@@ -5,11 +5,12 @@ import { pendingProposal } from './proposal';
 
 export interface DialogueReply {
   action: 'adjust' | 'create' | 'ask';
+  is_new_project?: boolean;
   summary: string;
   instruction?: string;
   changes?: string[];
   scope?: 'whole' | 'selected';
-  design?: Spec;
+  design?: Spec & { title?: string };
 }
 
 export function dialogueContext(
@@ -63,12 +64,19 @@ export function dialogueMessage(
         applied: false,
       },
     };
-  if (reply.action === 'create' && reply.design)
+  if (reply.action === 'create' && reply.design) {
+    const { title, ...cleanSpec } = reply.design;
     return {
       ...base,
       type: 'organize',
-      organize: { ...reply.design, specSnapshot: JSON.stringify(reply.design) },
+      organize: {
+        ...cleanSpec,
+        title: reply.design.title,
+        is_new_project: reply.is_new_project,
+        specSnapshot: JSON.stringify(cleanSpec),
+      },
     };
+  }
   return { ...base, type: 'text', content: reply.summary };
 }
 

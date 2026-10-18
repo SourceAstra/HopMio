@@ -1,14 +1,25 @@
-import { House, Plus, Settings, Sparkles } from 'lucide-react';
+import { House, Settings, Sparkles } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
 import { Usagi } from './Usagi';
-import { isModelDraft } from '../features/modeling/quality';
 
 export function Topbar() {
   const s = useStudio();
 
+  const handleGoHome = () => {
+    s.setRoom('desk');
+    window.dispatchEvent(new CustomEvent('yaha-reset-home'));
+  };
+
   return (
     <header className="topbar">
-      <div className="brand" onClick={() => s.setRoom('hall')} role="button" tabIndex={0} title="回到小屋门厅">
+      <div
+        className="brand home-logo"
+        onClick={handleGoHome}
+        role="button"
+        tabIndex={0}
+        title="返回首页造物大厅"
+        aria-label="返回首页造物大厅"
+      >
         <div className="brand-icon-wrap">
           <House size={26} />
           <span className="brand-sparkle">✦</span>
@@ -22,25 +33,8 @@ export function Topbar() {
         </div>
       </div>
 
-      <div className="topbar-center-group">
-        {s.project && (
-          <div className="topbar-project-indicator" onClick={() => s.setRoom('desk')} title="当前造物项目">
-            <span className="indicator-project-name">{s.project.name}</span>
-            <span className={`indicator-status-pill ${s.dirty ? 'dirty' : 'clean'}`}>
-              {s.dirty ? '● 待应用新版' : isModelDraft(s.project.model) ? '● 待改进草稿' : s.project.model ? '✓ 已生成' : '等待造物'}
-            </span>
-          </div>
-        )}
-        <button
-          className="topbar-new-project-btn"
-          onClick={() => void s.create()}
-          disabled={s.busy}
-          title="开启一份全新的造物作品"
-        >
-          <Plus size={14} />
-          <span>开始新作品</span>
-        </button>
-      </div>
+      {/* 顶部中央保持极致纯净留白，任务感知下沉至大厅输入坞正下方 */}
+      <div className="topbar-center-spacer" />
 
       <div className="topbar-right">
         <span className="family-badge">

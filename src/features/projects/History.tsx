@@ -5,6 +5,7 @@ import { ModelViewer } from '../../components/ModelViewer';
 import { Modal } from '../../components/Modal';
 import { useStudio } from '../../state/StudioContext';
 import type { Project, Revision } from '../../types';
+import { isModelDraft } from '../modeling/quality';
 
 export function History({
   project,
@@ -76,6 +77,7 @@ export function History({
             <div>
               <span className="revision-kicker">VERSION {String(number).padStart(2, '0')}</span>
               <h3>{selected?.reason}</h3>
+              {isModelDraft(selected?.model) && <p className="surface-warning">候选草稿 · 未通过造型审阅，选择查看不代表已达到成品质量。</p>}
               <p>{selected && new Date(selected.created_at).toLocaleString('zh-CN')}</p>
             </div>
           </div>

@@ -6,8 +6,9 @@ ACTION="build-start"
 
 usage() {
     cat <<'EOF'
-用法：./deploy.sh [--start | --build | --no-start | --stop | --status | --restart | --foreground]
+用法：./deploy.sh [--start | --build | --no-start | --stop | --status | --restart | --foreground] [--no-force]
 默认编译 Go 宿主与前端，然后后台启动：http://127.0.0.1:5173
+默认强制部署：端口被本项目相关进程（含其他守护者拉起的实例）占用时自动接管。
 --start       使用已有程序后台启动，不编译
 --build       同默认：编译后后台启动
 --no-start    仅编译，不启动
@@ -15,24 +16,28 @@ usage() {
 --status      查看本项目后台进程状态
 --restart     使用已有程序重启后台进程
 --foreground  使用已有程序前台启动，Ctrl+C 停止
-不安装系统服务，不设置自动启动，不自动终止其他占用端口的程序。
+--no-force    端口被占用时报错退出，不自动终止占用进程
+不安装系统服务，不设置自动启动；强制接管只终止属于本项目的进程，无关程序仍会拒绝处理。
 可选环境变量：YAHA_PORT、YAHA_DATA_DIR、YAHA_WEB_DIR、YAHA_PYTHON
 EOF
 }
 
-case "${1:-}" in
-    '') ;;
-    --start) ACTION="start"; shift ;;
-    --build) shift ;;
-    --no-start) ACTION="build"; shift ;;
-    --stop) ACTION="stop"; shift ;;
-    --status) ACTION="status"; shift ;;
-    --restart) ACTION="restart"; shift ;;
-    --foreground) ACTION="foreground"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) usage >&2; exit 2 ;;
-esac
-[[ $# -eq 0 ]] || { usage >&2; exit 2; }
+FORCE=1
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --start) ACTION="start" ;;
+        --build) ;;
+        --no-start) ACTION="build" ;;
+        --stop) ACTION="stop" ;;
+        --status) ACTION="status" ;;
+        --restart) ACTION="restart" ;;
+        --foreground) ACTION="foreground" ;;
+        --no-force) FORCE=0 ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage >&2; exit 2 ;;
+    esac
+    shift
+done
 [[ "$(uname -s)" == Linux ]] || { echo "此入口仅支持 Linux。" >&2; exit 1; }
 cd -- "$ROOT_DIR"
 
@@ -118,4 +123,6 @@ if [[ "$ACTION" == foreground ]]; then
     exec "$BINARY" -port "$PORT" -data "$DATA_DIR" -web "$WEB_DIR"
 fi
 [[ "$ACTION" != restart ]] || control stop
-control start -- "$BINARY" -port "$PORT" -data "$DATA_DIR" -web "$WEB_DIR"
+FORCE_FLAG=""
+if [[ "$FORCE" == 1 ]]; then FORCE_FLAG="--force"; fi
+control $FORCE_FLAG start -- "$BINARY" -port "$PORT" -data "$DATA_DIR" -web "$WEB_DIR"

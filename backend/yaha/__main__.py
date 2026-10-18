@@ -27,13 +27,16 @@ def main():
                 result = service.call(request["method"], request.get("params", {}))
                 response = {"id": request["id"], "result": result}
             except (DomainError, ValidationError) as error:
+                if isinstance(error, ValidationError):
+                    traceback.print_exc(file=sys.stderr)
+                    sys.stderr.flush()
                 response = {
                     "id": request.get("id"),
                     "error": {
                         "code": getattr(error, "code", "INVALID_INPUT"),
                         "message": str(error)
                         if isinstance(error, DomainError)
-                        else "参数不符合范围，请检查尺寸或文件数量。",
+                        else f"参数不符合范围，请检查尺寸或文件数量: {error}",
                     },
                 }
             except Exception:

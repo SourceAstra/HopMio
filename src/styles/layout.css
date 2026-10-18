@@ -17,6 +17,74 @@
   top: 0;
   z-index: 30;
   box-shadow: 0 2px 10px rgba(100, 70, 20, 0.03);
+  transition: margin-left 0.24s cubic-bezier(0.4, 0, 0.2, 1), width 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.sidebar-collapsed .topbar {
+  margin-left: 56px;
+  width: calc(100vw - 56px);
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
+  padding: 12px 28px 0;
+  height: 56px;
+}
+
+body.sidebar-collapsed .topbar .brand {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(8px);
+  padding: 4px 12px 4px 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);
+  transition: all 0.15s ease;
+}
+
+body.sidebar-collapsed .topbar .brand:hover {
+  background: #ffffff;
+  border-color: #f59e0b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.16);
+}
+
+body.sidebar-collapsed .topbar .brand-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+body.sidebar-collapsed .topbar .brand-icon-wrap svg {
+  width: 16px;
+  height: 16px;
+}
+
+body.sidebar-collapsed .topbar .brand-sparkle {
+  display: none;
+}
+
+body.sidebar-collapsed .topbar .brand-title-line {
+  gap: 6px;
+  align-items: baseline;
+}
+
+body.sidebar-collapsed .topbar .brand-title-line strong {
+  font-size: 14px;
+  color: #382405;
+}
+
+body.sidebar-collapsed .topbar .brand-en {
+  font-size: 11px;
+  color: #a86c12;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+body.sidebar-collapsed .topbar .brand-subtitle {
+  display: none;
 }
 
 .brand {
@@ -222,6 +290,12 @@
   height: calc(100vh - 68px);
   max-height: calc(100vh - 68px);
   overflow: hidden;
+  transition: grid-template-columns 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app-body.sidebar-collapsed,
+body.sidebar-collapsed .app-body {
+  grid-template-columns: 56px minmax(0, 1fr);
 }
 
 /* 侧边栏整体 Sidebar */
@@ -237,7 +311,231 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  z-index: 10;
+  z-index: 20;
+  transition: width 0.24s cubic-bezier(0.4, 0, 0.2, 1), padding 0.24s ease;
+}
+
+/* 收起状态下的 56px 极致紧凑侧栏 (对齐 Mint 标杆) */
+.sidebar.sidebar-collapsed,
+body.sidebar-collapsed .sidebar {
+  width: 56px !important;
+  min-width: 56px !important;
+  max-width: 56px !important;
+  padding: 14px 8px !important;
+  overflow: visible !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  height: 100vh !important;
+  border-right: 1.5px solid #ebd9b8 !important;
+  z-index: 1000 !important;
+}
+
+body.sidebar-collapsed .app-body {
+  margin-left: 56px;
+  width: calc(100vw - 56px);
+  display: block;
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
+}
+
+body.sidebar-collapsed .app-body > main {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.sidebar.sidebar-collapsed .brand,
+body.sidebar-collapsed .sidebar .brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 0 12px 0;
+  margin: 0 0 10px 0;
+  border-bottom: 1px solid rgba(235, 217, 184, 0.8);
+  position: relative;
+}
+
+.sidebar.sidebar-collapsed .brand-logo,
+body.sidebar-collapsed .sidebar .brand-logo {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #fff7d6 0%, #fee685 100%);
+  border: 1.5px solid #f9d854;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 3px 8px rgba(245, 158, 11, 0.18);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding: 0;
+}
+
+.sidebar.sidebar-collapsed .brand-logo:hover,
+body.sidebar-collapsed .sidebar .brand-logo:hover {
+  transform: scale(1.08);
+}
+
+.brand-logo-inner {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-logo-inner svg,
+.brand-logo-inner .cottage {
+  width: 24px;
+  height: 24px;
+}
+
+.sidebar.sidebar-collapsed .brand-text,
+body.sidebar-collapsed .sidebar .brand-text {
+  display: none !important;
+}
+
+.sidebar.sidebar-collapsed .nav-container,
+body.sidebar-collapsed .sidebar .nav-container {
+  overflow: visible !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar.sidebar-collapsed .nav-category-group,
+body.sidebar-collapsed .sidebar .nav-category-group {
+  width: 40px !important;
+  margin: 0 auto;
+  position: relative;
+}
+
+.sidebar.sidebar-collapsed .nav-main-btn,
+body.sidebar-collapsed .sidebar .nav-main-btn {
+  width: 40px !important;
+  height: 40px !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  align-items: center !important;
+  border-radius: 10px;
+}
+
+.sidebar.sidebar-collapsed .nav-btn-icon,
+body.sidebar-collapsed .sidebar .nav-btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.sidebar.sidebar-collapsed .nav-btn-text,
+body.sidebar-collapsed .sidebar .nav-btn-text,
+.sidebar.sidebar-collapsed .star-sparkle,
+body.sidebar-collapsed .sidebar .star-sparkle,
+.sidebar.sidebar-collapsed .nav-sub-pills,
+body.sidebar-collapsed .sidebar .nav-sub-pills {
+  display: none !important;
+}
+
+/* 侧边栏底部折叠切换按键 */
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid rgba(235, 217, 184, 0.7);
+  display: flex;
+  justify-content: center;
+}
+
+.sidebar-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #ebd9b8;
+  border-radius: 10px;
+  color: #8c7e68;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #ffffff;
+  color: #b45309;
+  border-color: #f59e0b;
+}
+
+.sidebar.sidebar-collapsed .sidebar-toggle-btn,
+body.sidebar-collapsed .sidebar .sidebar-toggle-btn {
+  width: 40px;
+  height: 36px;
+  padding: 0;
+}
+
+/* =========================================================================
+   Mint 同款: 侧边栏悬停文字气泡 (Tooltip Only)
+   ========================================================================= */
+.sidebar.sidebar-collapsed [data-tooltip],
+body.sidebar-collapsed .sidebar [data-tooltip] {
+  position: relative;
+}
+
+.sidebar.sidebar-collapsed [data-tooltip]::after,
+body.sidebar-collapsed .sidebar [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  background: #2b2316;
+  color: #fffdf7;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: 8px;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+  z-index: 9999;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sidebar.sidebar-collapsed [data-tooltip]::before,
+body.sidebar-collapsed .sidebar [data-tooltip]::before {
+  content: "";
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-6px);
+  border: 5px solid transparent;
+  border-right-color: #2b2316;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+  z-index: 10000;
+}
+
+.sidebar.sidebar-collapsed [data-tooltip]:hover::after,
+.sidebar.sidebar-collapsed [data-tooltip]:hover::before,
+body.sidebar-collapsed .sidebar [data-tooltip]:hover::after,
+body.sidebar-collapsed .sidebar [data-tooltip]:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
 }
 
 .sidebar-brand-cottage {

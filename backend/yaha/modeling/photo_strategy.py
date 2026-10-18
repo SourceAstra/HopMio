@@ -6,11 +6,14 @@ PHOTO_MODES = (Mode.IMAGE, Mode.MULTIVIEW)
 
 
 def select_photo_route(service, spec, automatic):
-    if not automatic or spec.mode not in PHOTO_MODES:
+    if not automatic or spec.mode not in PHOTO_MODES or (spec.modeling_plan and spec.modeling_plan.source_mesh):
         return None
-    scan = service.modelers["reconstruction"].status()
     requested = spec.provider
-    spec.provider = "parametric" if spec.photo_policy == "parameters" else "reconstruction"
+    scan = service.modelers["reconstruction"].status()
+    if spec.photo_policy == "auto":
+        spec.provider = "parametric" if len(spec.asset_ids) < scan["min_photos"] else "reconstruction"
+    else:
+        spec.provider = "parametric" if spec.photo_policy == "parameters" else "reconstruction"
     if spec.provider == "reconstruction":
         if not scan["available"]:
             raise DomainError(scan["message"], "RECONSTRUCTION_UNAVAILABLE")

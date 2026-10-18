@@ -6,6 +6,7 @@ import { useStudio } from '../../state/StudioContext';
 import { ParameterEditor } from '../modeling/ParameterEditor';
 import { ProviderChoice } from '../modeling/ProviderChoice';
 import { PhotoRegion } from './PhotoRegion';
+import { patchDimensions } from '../modeling/dimensions';
 
 export function ReconstructionDetails({ onClose }: { onClose: () => void }) {
   const s = useStudio();
@@ -27,7 +28,10 @@ export function ReconstructionDetails({ onClose }: { onClose: () => void }) {
           <button
             className="secondary"
             disabled={s.busy || s.running || !s.spec.asset_ids.length}
-            onClick={() => void s.design()}
+            onClick={() => {
+              s.setSpec((old) => ({ ...old, provider: 'reconstruction', photo_policy: 'surface' }));
+              void s.design({ ...s.spec, provider: 'reconstruction', photo_policy: 'surface' });
+            }}
           >
             <Check size={16} /> {plan ? '重新检查照片' : '检查照片以手动调整'}
           </button>
@@ -84,15 +88,15 @@ export function ReconstructionDetails({ onClose }: { onClose: () => void }) {
                     const val = event.target.value;
                     const num = parseInt(val, 10);
                     if (!isNaN(num) && num > 0) {
-                      s.setSpec((old) => ({ ...old, height_mm: num }));
+                      s.setSpec((old) => patchDimensions(old, { height_mm: num }));
                     }
                   }}
                   onBlur={(event) => {
                     const num = parseInt(event.target.value, 10);
                     if (isNaN(num) || num < 10) {
-                      s.setSpec((old) => ({ ...old, height_mm: 10 }));
+                      s.setSpec((old) => patchDimensions(old, { height_mm: 10 }));
                     } else if (num > 500) {
-                      s.setSpec((old) => ({ ...old, height_mm: 500 }));
+                      s.setSpec((old) => patchDimensions(old, { height_mm: 500 }));
                     }
                   }}
                 />

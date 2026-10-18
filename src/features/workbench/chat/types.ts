@@ -27,6 +27,8 @@ export interface MilestoneData {
 }
 
 export interface OrganizeData {
+  title?: string;
+  is_new_project?: boolean;
   superseded?: boolean;
   prompt: string;
   template: string;

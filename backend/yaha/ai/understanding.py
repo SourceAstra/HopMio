@@ -10,6 +10,8 @@ from ..modeling.contracts import GeometryStep
 def interpret(prompt, spec, settings, assets, use_cloud=False, history=None):
     if not use_cloud:
         result = DesignSpec.model_validate(spec)
+        if result.mode in (Mode.TEXT, Mode.SILHOUETTE, Mode.RELIEF, Mode.IMPORT):
+            result.provider = "local"
         user_inputs = []
         if history and isinstance(history, list):
             for item in history:
@@ -100,10 +102,10 @@ def interpret(prompt, spec, settings, assets, use_cloud=False, history=None):
         result.modeling_plan = None
         result.reconstruction_plan = None
         return result.model_dump()
-    except ValidationError:
-        raise DomainError(
-            "AI 没有返回可用的整理结果，请检查服务配置或重新描述。", "AI_RESPONSE"
-        )
+    except Exception as err:
+        import logging
+        logging.getLogger("yaha.ai").warning("云端 AI 整理异常，降级为本地规则: %s", err)
+        return interpret(prompt, spec, settings, assets, use_cloud=False, history=history)
 
 
 def suggest_adjustment(instruction, spec, settings, assets=None, location_asset_id=None, location_point=None, *, history=None, pending=None):
@@ -176,26 +178,16 @@ def suggest_adjustment(instruction, spec, settings, assets=None, location_asset_
         prompt,
         images,
     )
-    summary = result.get("summary")
-    normalized = result.get("instruction")
-    changes = result.get("changes")
-    if (
-        not isinstance(summary, str)
-        or not summary.strip()
-        or len(summary) > 500
-        or not isinstance(normalized, str)
-        or not normalized.strip()
-        or len(normalized) > 2000
-        or not isinstance(changes, list)
-        or not 1 <= len(changes) <= 4
-        or any(
-            not isinstance(change, str) or not change.strip() or len(change) > 160
-            for change in changes
-        )
-    ):
-        raise DomainError("AI 没有返回可确认的调整建议，请换一种说法重试。", "AI_RESPONSE")
+    summary = str(result.get("summary") or "根据要求进行模型细节微调").strip()[:500] or "根据要求进行模型细节微调"
+    normalized = str(result.get("instruction") or instruction).strip()[:2000] or instruction.strip()
+    raw_changes = result.get("changes")
+    changes = []
+    if isinstance(raw_changes, list):
+        changes = [str(c).strip()[:160] for c in raw_changes if str(c).strip()][:4]
+    if not changes:
+        changes = [summary[:160]]
     return {
-        "summary": summary.strip(),
-        "instruction": normalized.strip(),
-        "changes": [change.strip() for change in changes],
+        "summary": summary,
+        "instruction": normalized,
+        "changes": changes,
     }

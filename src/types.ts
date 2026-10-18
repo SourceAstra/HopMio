@@ -63,7 +63,9 @@ export interface Measurement {
   status: 'pass' | 'fail' | 'unverified';
 }
 export interface GeometryPlan {
-  schema_version: 2 | 3 | 4 | 5 | 6;
+  schema_version: 2 | 3 | 4 | 5 | 6 | 7;
+  source_mesh?: { asset_id: string; sha256: string; scale: Scalar } | null;
+  source_options?: { base: boolean; hole: boolean; hole_shape: 'round' | 'heart' } | null;
   title: string;
   source_prompt: string;
   source_asset_ids: string[];
@@ -173,6 +175,7 @@ export interface Model {
     }>;
   };
   photo_fidelity?: {
+    edited?: boolean;
     schema_version: 'yaha.photo-fidelity/v1';
     appearance_status?: 'accepted' | 'unverified';
     review_scope?: 'photo_reference' | 'design_intent';
@@ -242,6 +245,8 @@ export interface Project {
   updated_at: string;
 }
 export interface Asset {
+  archived?: boolean;
+  source?: 'user' | 'generated';
   id: string;
   sha256: string;
   name: string;
@@ -255,6 +260,7 @@ export interface ModelAdjustment {
   target_part_id?: string;
   location_asset_id?: string;
   location_point?: [number, number];
+  location_point_mm?: [number, number, number];
 }
 export interface Job {
   error_code?: string;
@@ -294,6 +300,8 @@ export interface Job {
     feature_counts: { asset_id: string; count: number }[];
   };
   result?: {
+    applied?: boolean;
+    candidate_revision_id?: string;
     project?: Project;
     asset?: Asset;
     spec?: Spec;
@@ -339,6 +347,35 @@ export interface AIModelItem {
   supports_images: boolean;
   has_key?: boolean;
 }
+export interface BambuTelemetry {
+  online: boolean;
+  connected: boolean;
+  gcode_state: string;
+  progress_percent: number;
+  remaining_minutes: number;
+  nozzle_temper: number;
+  nozzle_target: number;
+  bed_temper: number;
+  bed_target: number;
+  layer_num: number;
+  total_layers: number;
+  subtask_name: string;
+  last_seen: number;
+}
+export interface BambuStatus {
+  configured: boolean;
+  account?: string | null;
+  selected_dev_id?: string | null;
+  online: boolean;
+  telemetry: BambuTelemetry;
+}
+export interface BambuDevice {
+  dev_id: string;
+  name: string;
+  model: string;
+  online: boolean;
+  selected: boolean;
+}
 export interface Preferences {
   cloud_enabled: boolean;
   daily_limit: number;
@@ -354,7 +391,9 @@ export interface Preferences {
   slicer?: { available: boolean; version?: string; message: string; executable?: string };
   reconstruction?: { available: boolean; message: string; min_photos: number; max_photos: number };
   pin_set: boolean;
+  print_pin_set?: boolean;
   chat_configured: boolean;
+  bambu?: BambuStatus;
 }
 export interface Revision {
   id: string;
@@ -364,11 +403,18 @@ export interface Revision {
   spec: Spec;
 }
 export interface Bootstrap {
+  material_library?: MaterialLibrary;
   projects: Project[];
   assets: Asset[];
   settings: Preferences;
   profile: Profile;
   jobs: Job[];
+}
+export interface MaterialLibrary {
+  schema_version: 1;
+  version: number;
+  folders: import('./features/materials/folders').MaterialFolder[];
+  assignments: Record<string, string>;
 }
 declare global {
   interface Window {

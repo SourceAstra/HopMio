@@ -1,0 +1,320 @@
+/* 造物工作流：沿用乌萨奇金色，以主题令牌维护同一套交互层级。 */
+:root {
+  --craft-panel: #20242d;
+  --craft-well: #171b23;
+  --craft-ink: #f4ecd9;
+  --craft-muted: #b9af9e;
+  --craft-line: #494538;
+  --craft-selected: #38301d;
+}
+body.theme-light {
+  --craft-panel: #fffdf8;
+  --craft-well: #f8f5ec;
+  --craft-ink: #362d20;
+  --craft-muted: #756956;
+  --craft-line: #e4d7bd;
+  --craft-selected: #fff3c6;
+}
+.shelf-picker {
+  display: grid;
+  gap: 12px;
+  color: var(--craft-ink);
+  min-width: 0;
+}
+.shelf-picker-toolbar,
+.shelf-picker-actions,
+.shelf-picker-footer,
+.creation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.shelf-picker-toolbar {
+  justify-content: space-between;
+}
+.shelf-picker-toolbar strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.shelf-picker-toolbar input {
+  width: min(100%, 220px);
+  background: var(--craft-well);
+  color: var(--craft-ink);
+  border: 1px solid var(--craft-line);
+  padding: 9px 12px;
+  border-radius: 10px;
+}
+.shelf-picker-folders {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 3px 0 7px;
+}
+.shelf-picker-folders button {
+  white-space: nowrap;
+  border: 1px solid var(--craft-line);
+  border-radius: 20px;
+  padding: 7px 11px;
+}
+.shelf-picker-folders button[aria-pressed='true'] {
+  background: var(--craft-selected);
+  border-color: var(--accent-deep);
+}
+.shelf-picker-actions {
+  color: var(--craft-muted);
+  font-size: 12px;
+}
+.shelf-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 9px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 3px;
+}
+.shelf-picker-grid > button {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+  padding: 5px;
+  border: 1px solid var(--craft-line);
+  border-radius: 12px;
+  background: var(--craft-panel);
+  text-align: left;
+}
+.shelf-picker-grid > button[aria-pressed='true'] {
+  border-color: var(--accent-deep);
+  box-shadow: 0 0 0 1px var(--accent-deep);
+  background: var(--craft-selected);
+}
+.shelf-picker-grid img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.shelf-picker-grid span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.shelf-picker-check {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  background: var(--accent);
+  color: #302512;
+  border-radius: 50%;
+  padding: 2px;
+  box-sizing: content-box;
+}
+.shelf-picker-footer {
+  justify-content: flex-end;
+  padding-top: 18px;
+}
+.creation-actions {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--craft-line);
+}
+.creation-actions > .primary {
+  flex: 1;
+}
+.workbench-pipeline-details {
+  border: 1px solid var(--craft-line);
+  border-radius: 12px;
+  color: var(--craft-muted);
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.workbench-pipeline-details summary,
+.mode-options-details summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+.workbench-pipeline-details .pipeline-energy-rail {
+  margin-top: 10px;
+}
+.workbench-mobile-tabs {
+  display: none;
+}
+.new-project-modal-card,
+.job-conflict-modal-card {
+  background: var(--craft-panel);
+  color: var(--craft-ink);
+  border-color: var(--craft-line);
+}
+.new-project-header,
+.conflict-modal-header {
+  background: var(--craft-selected);
+  border-color: var(--craft-line);
+}
+.new-project-footer,
+.conflict-modal-footer,
+.context-prep-block,
+.new-project-photo-shelf-picker {
+  background: var(--craft-well);
+  border-color: var(--craft-line);
+}
+.new-project-modal-card :is(h2, h3, strong, label, .mode-name, .capsule-title, .prompt-label),
+.job-conflict-modal-card :is(h3, strong, p) {
+  color: var(--craft-ink);
+}
+.new-project-modal-card :is(.mode-desc, .label-tip, .section-label, .capsule-desc),
+.job-conflict-modal-card .conflict-desc-text {
+  color: var(--craft-muted);
+}
+.new-project-modal-card
+  :is(
+    .mode-option-card,
+    .inspiration-capsule-card,
+    .photo-preset-chip,
+    .project-name-text-input,
+    .prompt-textarea
+  ),
+.current-running-job-card {
+  background: var(--craft-panel);
+  color: var(--craft-ink);
+  border-color: var(--craft-line);
+}
+.new-project-modal-card
+  :is(.mode-option-card.active, .inspiration-capsule-card.picked, .photo-preset-chip.picked) {
+  background: var(--craft-selected);
+  border-color: var(--accent-deep);
+}
+.new-project-modal-card .form-group-section {
+  margin-block: 12px;
+}
+.new-project-modal-card input,
+.new-project-modal-card textarea {
+  max-width: 100%;
+}
+.new-project-modal-card .mode-selection-grid {
+  margin-top: 10px;
+}
+.new-project-close-btn:disabled,
+.new-project-cancel-btn:disabled {
+  cursor: wait;
+}
+.job-conflict-modal-card {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+@media (min-width: 851px) and (max-width: 1400px) {
+  .workbench-mobile-tabs {
+    display: flex;
+    gap: 12px;
+  }
+  .workbench-mobile-tabs button {
+    padding: 7px 12px;
+    border: 1px solid var(--craft-line);
+    border-radius: 10px;
+  }
+  .workbench-grid.full-height.with-stage-drawer {
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  }
+  .workbench-grid.full-height.with-stage-drawer > .adjust-stack {
+    position: fixed;
+    top: 88px;
+    right: 16px;
+    bottom: 16px;
+    width: 340px;
+    height: auto;
+    z-index: 80;
+    background: var(--craft-well);
+    color: var(--craft-ink);
+    border: 1px solid var(--craft-line);
+    border-radius: 18px;
+    padding: 12px;
+    box-shadow: 0 12px 44px #0003;
+  }
+}
+@media (max-width: 850px) {
+  .workbench-mobile-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    background: var(--craft-well);
+    border: 1px solid var(--craft-line);
+    border-radius: 12px;
+  }
+  .workbench-mobile-tabs button {
+    flex: 1;
+    color: var(--craft-muted);
+    padding: 9px;
+    border-radius: 8px;
+  }
+  .workbench-mobile-tabs button[aria-pressed='true'] {
+    color: var(--craft-ink);
+    background: var(--craft-selected);
+  }
+  .workbench-grid.full-height {
+    grid-auto-rows: minmax(0, 1fr);
+  }
+  .workbench-grid[data-active-pane='model'] > :not(.model-panel),
+  .workbench-grid[data-active-pane='chat'] > :not(.idea-panel),
+  .workbench-grid[data-active-pane='parameters'] > :not(.adjust-stack) {
+    display: none;
+  }
+  .workbench-grid.full-height > :is(.idea-panel, .model-panel, .adjust-stack) {
+    width: 100%;
+    min-width: 0;
+    min-height: 420px;
+  }
+}
+@media (max-width: 600px) {
+  .new-project-overlay {
+    padding: 8px;
+  }
+  .new-project-modal-card {
+    max-height: calc(100dvh - 16px);
+    border-radius: 18px;
+  }
+  .new-project-header,
+  .new-project-body,
+  .new-project-footer {
+    padding: 14px;
+  }
+  .new-project-modal-card .header-badge-row {
+    display: none;
+  }
+  .new-project-modal-card .header-title {
+    font-size: 19px;
+  }
+  .new-project-modal-card .new-project-submit-btn {
+    flex: 1;
+    padding: 12px;
+  }
+  .new-project-modal-card .new-project-cancel-btn {
+    white-space: nowrap;
+    padding: 12px;
+  }
+  .shelf-picker-grid {
+    max-height: 290px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .shelf-picker-toolbar input {
+    width: 100%;
+  }
+  .conflict-modal-footer {
+    flex-direction: column;
+  }
+  .conflict-modal-footer button {
+    width: 100%;
+  }
+  .asset-hover-actions {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .new-project-overlay,
+  .job-conflict-overlay,
+  .job-conflict-modal-card {
+    animation: none;
+  }
+}

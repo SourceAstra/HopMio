@@ -15,7 +15,7 @@ def encode(image):
 
 def load(assets, identifier, size):
     asset = assets.db.get("assets", identifier)
-    if not asset or asset["kind"] != "image":
+    if not asset or (asset.get("kind") != "image" and asset.get("extension") not in {".png", ".jpg", ".jpeg", ".webp"}):
         raise DomainError("照片参考包含非图片材料，请重新选择。", "PHOTO_REQUIRED")
     with Image.open(assets.path(identifier)) as source:
         image = ImageOps.exif_transpose(source).convert("RGB")

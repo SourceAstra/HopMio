@@ -19,16 +19,16 @@ def import_package(encoded, assets, projects):
     try:
         with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded, validate=True))) as package:
             names = package.namelist()
-            allowed = {"project.json", "model.stl", "model.glb", "print.gcode.3mf", "slice-report.json"} | set(MODEL_FILES)
-            if len(names) != len(set(names)) or len(names) > 109 or any(name not in allowed and not re.fullmatch(r"inputs/(?:[0-9]|[1-8][0-9]|9[0-5])\.(png|jpg|jpeg|webp|stl|glb|3mf)", name) for name in names):
+            allowed = {"project.json", "model.stl", "model.glb", "print.gcode.3mf", "slice-report.json", "edit-source.stl"} | set(MODEL_FILES)
+            if len(names) != len(set(names)) or len(names) > 110 or any(name not in allowed and not re.fullmatch(r"inputs/(?:[0-9]|[1-8][0-9]|9[0-5])\.(png|jpg|jpeg|webp|stl|glb|3mf)", name) for name in names):
                 raise DomainError("作品包包含不支持的文件。")
             if sum(item.file_size for item in package.infolist()) > MAX_UNPACKED_BYTES or any(item.file_size > 40 * 1024 * 1024 for item in package.infolist()):
                 raise DomainError("作品包解压后过大。")
             data = json.loads(package.read("project.json"))
             version = data.get("schema_version")
-            if version not in (1, 2, 3):
+            if version not in (1, 2, 3, 4):
                 raise DomainError("这个作品包的版本暂时不支持。")
-            if version in (2, 3):
+            if version in (2, 3, 4):
                 files = data["files"]
                 if set(files) != set(names) - {"project.json"}:
                     raise DomainError("作品包文件清单不一致。")
@@ -50,9 +50,14 @@ def import_package(encoded, assets, projects):
             for name in inputs:
                 extension = "." + name.rsplit(".", 1)[-1]
                 originals.append(store(name, extension, "image" if extension in (".png", ".jpg", ".jpeg", ".webp") else "model-input"))
-            if version == 3 and len(originals) != len(spec.asset_ids):
+            if version >= 3 and len(originals) != len(spec.asset_ids):
                 raise DomainError("作品包的来源照片与设计契约数量不一致。")
             mapping = dict(zip(spec.asset_ids, originals))
+            if spec.modeling_plan and spec.modeling_plan.source_mesh:
+                source = spec.modeling_plan.source_mesh
+                if "edit-source.stl" not in names or hashlib.sha256(package.read("edit-source.stl")).hexdigest() != source.sha256:
+                    raise DomainError("作品包缺少匹配的编辑源网格。")
+                mapping[source.asset_id] = store("edit-source.stl", ".stl", units="mm")
             restored = remap_observations(spec.model_dump(), mapping)
             restored["asset_ids"] = originals
             spec = DesignSpec.model_validate(restored)

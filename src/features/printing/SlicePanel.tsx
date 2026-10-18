@@ -39,7 +39,10 @@ export function SlicePanel() {
             className="primary"
             disabled={s.busy || s.running}
             onClick={() =>
-              void s.act(() => download(report.asset_id, `${s.project!.name}.gcode.3mf`))
+              void s.act(async () => {
+                const res = await download(report.asset_id, `${s.project!.name}.gcode.3mf`);
+                if (res?.saved) s.setNotice('已将切片打印文件 (.gcode.3mf) 成功保存到本地设备！');
+              })
             }
           >
             <Download size={18} />
@@ -47,7 +50,12 @@ export function SlicePanel() {
           </button>
           <button
             className="link"
-            onClick={() => void s.act(() => download(report.report_id, '实际切片报告.json'))}
+            onClick={() =>
+              void s.act(async () => {
+                const res = await download(report.report_id, '实际切片报告.json');
+                if (res?.saved) s.setNotice('已将实际切片报告保存到本地设备！');
+              })
+            }
           >
             下载切片报告
           </button>

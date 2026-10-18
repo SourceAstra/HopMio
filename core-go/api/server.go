@@ -30,6 +30,8 @@ var publicMethods = map[string]bool{
 	"asset.upload":             true,
 	"asset.delete":             true,
 	"asset.list":               true,
+	"materials.get":            true,
+	"materials.save":           true,
 	"idea.interpret":           true,
 	"idea.adjustment":          true,
 	"idea.converse":            true,

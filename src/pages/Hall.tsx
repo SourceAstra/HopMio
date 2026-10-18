@@ -20,16 +20,9 @@ import { INSPIRATION_ITEMS } from '../theme/inspirations';
 export function Hall() {
   const s = useStudio();
 
-  // 快捷进入某种模式
-  const enterMode = (modeId: Mode, targetRoom: 'desk' | 'materials' = 'materials') => {
-    s.setSpec((old) => ({
-      ...old,
-      mode: modeId,
-      provider: providerForMode(modeId),
-      photo_policy: modeId === 'image' ? 'parameters' : modeId === 'multiview' ? 'surface' : old.photo_policy,
-      asset_ids: [],
-    }));
-    s.setRoom(targetRoom);
+  // 开启新作品向导（过度页）
+  const enterMode = (modeId: Mode) => {
+    s.openNewProject({ mode: modeId });
   };
 
   return (
@@ -75,7 +68,7 @@ export function Hall() {
 
             <button
               className="hall-cta-secondary"
-              onClick={() => void s.create()}
+              onClick={() => s.openNewProject()}
               disabled={s.busy}
               title="开启一件全新的作品"
             >
@@ -109,7 +102,7 @@ export function Hall() {
             className="hall-mode-card featured"
             role="button"
             tabIndex={0}
-            onClick={() => enterMode('text', 'desk')}
+            onClick={() => enterMode('text')}
           >
             <div className="mode-card-badge-row">
               <span className="mode-card-emoji">💬</span>
@@ -129,7 +122,7 @@ export function Hall() {
             className="hall-mode-card"
             role="button"
             tabIndex={0}
-            onClick={() => enterMode('multiview', 'materials')}
+            onClick={() => enterMode('multiview')}
           >
             <div className="mode-card-badge-row">
               <span className="mode-card-emoji">📸</span>
@@ -139,7 +132,7 @@ export function Hall() {
             <p>绕着心爱的粘土、手办或小玩具拍一圈照片，稠密推演完整 3D 轮廓。</p>
             <div className="mode-card-footer">
               <span className="mode-action-link">
-                去取材角上传照片 <ArrowRight size={14} />
+                选用照片开启还原 <ArrowRight size={14} />
               </span>
             </div>
           </div>
@@ -149,7 +142,7 @@ export function Hall() {
             className="hall-mode-card"
             role="button"
             tabIndex={0}
-            onClick={() => enterMode('image', 'materials')}
+            onClick={() => enterMode('image')}
           >
             <div className="mode-card-badge-row">
               <span className="mode-card-emoji">🧸</span>
@@ -169,7 +162,7 @@ export function Hall() {
             className="hall-mode-card"
             role="button"
             tabIndex={0}
-            onClick={() => enterMode('silhouette', 'materials')}
+            onClick={() => enterMode('silhouette')}
           >
             <div className="mode-card-badge-row">
               <span className="mode-card-emoji">🎨</span>
@@ -189,7 +182,7 @@ export function Hall() {
         <div className="hall-aux-modes">
           <button
             className="aux-mode-chip"
-            onClick={() => enterMode('import', 'materials')}
+            onClick={() => enterMode('import')}
             title="导入已有的 3D 模型进行体检与打印"
           >
             <FolderOpen size={15} />
@@ -197,7 +190,7 @@ export function Hall() {
           </button>
           <button
             className="aux-mode-chip"
-            onClick={() => enterMode('relief', 'materials')}
+            onClick={() => enterMode('relief')}
             title="将照片灰度转换为立体雕刻浮雕"
           >
             <Layers size={15} />

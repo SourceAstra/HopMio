@@ -10,6 +10,7 @@ from .storage.database import Database
 from .storage.assets import Assets
 from .storage.projects import Projects
 from .storage.conversations import Conversations, bounded_history, stored_context
+from .storage.materials import Materials
 from .settings import Settings
 from .jobs import Jobs
 from .modeling.backend import ModelingBackend
@@ -26,6 +27,7 @@ from .reconstruction.observations import OpenCVPhotoObserver
 from .slicing.service import start_slice
 from .slicing.runtime import availability as slicer_status
 from .validation import inspect, profile_hash
+from .devices import BambuCloudDriver
 from .exporting import export_project
 
 
@@ -35,6 +37,7 @@ class Service:
         self.assets = Assets(self.db)
         self.projects = Projects(self.db)
         self.conversations = Conversations(self.db, self.projects)
+        self.materials = Materials(self.db)
         self.settings = Settings(self.db)
         self.jobs = Jobs(self.db)
         for asset in self.db.list("assets"):
@@ -52,6 +55,7 @@ class Service:
         self.reviewer: ModelingReviewer | None = reviewer or (cloud if planner is None else None)
         self.editor: ModelingEditor | None = editor or (cloud if planner is None else None)
         self.outline_fitter: OutlineFitter = outline_fitter or OpenCVOutlineFitter()
+        self.bambu = BambuCloudDriver(self.db)
         self.lock = threading.RLock()
 
     def bootstrap(self):
@@ -61,16 +65,35 @@ class Service:
             "settings": self.settings.public() | self.runtime_status(),
             "profile": self.db.get("settings", "profile")
             or PrintProfile().model_dump(),
-            "assets": self.db.list("assets"),
+            "assets": self.asset_list(),
+            "material_library": self.materials.get(),
             "jobs": self.db.list("jobs"),
         }
 
     def close(self):
+        if hasattr(self, "bambu") and self.bambu.client:
+            try:
+                self.bambu.client.disconnect()
+            except Exception:
+                pass
         self.jobs.close()
         self.db.close()
 
     def runtime_status(self):
-        return {"blender": self.modeler.status(), "reconstruction": self.modelers["reconstruction"].status(), "slicer": slicer_status()}
+        return {
+            "blender": self.modeler.status(),
+            "reconstruction": self.modelers["reconstruction"].status(),
+            "slicer": slicer_status(),
+            "bambu": self.bambu.status(),
+        }
+
+    def asset_list(self):
+        generated = {
+            value for item in self.db.list("projects") + self.db.list("revisions")
+            for key, value in (item.get("model") or {}).items()
+            if key.endswith("_id") and isinstance(value, str)
+        }
+        return [asset | {"source": asset.get("source", "generated" if asset["id"] in generated else "user")} for asset in self.db.list("assets")]
 
     def generate(self, identifier, data, repair=False, *, adjustment=None, auto_photo=False):
         return start_generation(self, identifier, data, repair, adjustment=adjustment, auto_photo=auto_photo)
@@ -79,10 +102,12 @@ class Service:
         if method == "bootstrap":
             return self.bootstrap()
         if method == "project.create":
-            return self.projects.create(
-                p.get("name", "我的新作品"),
-                DesignSpec.model_validate(p.get("spec", {})).model_dump(),
-            )
+            with self.jobs.lock:
+                self.jobs.require_idle()
+                return self.projects.create(
+                    p.get("name", "我的新作品"),
+                    DesignSpec.model_validate(p.get("spec", {})).model_dump(),
+                )
         if method == "project.get":
             return self.projects.get(p["id"])
         if method == "project.list":
@@ -118,10 +143,17 @@ class Service:
             return self.assets.upload(p["name"], p["base64"])
         if method == "asset.delete":
             with self.lock:
-                self.assets.remove(p["id"])
-                return {"ok": True, "id": p["id"]}
+                asset = self.db.get("assets", p["id"])
+                if not asset:
+                    raise DomainError("素材已不存在，请刷新素材架。")
+                self.db.put("assets", asset["id"], asset | {"archived": True})
+                return {"ok": True, "id": p["id"], "archived": True}
         if method == "asset.list":
-            return self.db.list("assets")
+            return self.asset_list()
+        if method == "materials.get":
+            return self.materials.get()
+        if method == "materials.save":
+            return self.materials.save(p)
         if method == "asset.path":
             path = self.assets.path(p["id"])
             return {"path": str(path), "mime": self.db.get("assets", p["id"])["mime"]}
@@ -148,6 +180,9 @@ class Service:
             if not project or not project.get("model"):
                 # 待生成的参数计划并不等于已有模型，不能生成无法执行的微调卡片。
                 spec["modeling_plan"] = None
+            else:
+                from .modeling.mesh_editing import editable_spec
+                spec = editable_spec(DesignSpec.model_validate(spec), project, self.assets).model_dump()
             history, pending = stored_context(self.conversations.get(project_id)["messages"], revision) if project_id else ([], None)
             if isinstance(p.get("history"), list):
                 history = bounded_history(p["history"])
@@ -177,8 +212,12 @@ class Service:
                 raise DomainError("作品版本已改变，本次建议没有覆盖当前对话，请继续描述。", "REVISION_CHANGED")
             return result
         if method == "model.generate":
+            if "base_revision_id" in p and self.projects.get(p["id"])["revision_id"] != p["base_revision_id"]:
+                raise DomainError("作品版本已改变，请基于当前版本重新生成。", "REVISION_CHANGED")
             return self.generate(p["id"], p["spec"], auto_photo=p.get("auto_photo", True) is True)
         if method == "model.adjust":
+            if "base_revision_id" in p and self.projects.get(p["id"])["revision_id"] != p["base_revision_id"]:
+                raise DomainError("作品版本已改变，请重新确认微调建议。", "REVISION_CHANGED")
             return self.generate(p["id"], p["spec"], adjustment=ModelAdjustment.model_validate(p["adjustment"]))
         if method == "model.slice":
             return start_slice(self, p["id"], p["profile"])
@@ -222,8 +261,9 @@ class Service:
             return open_studio(self.assets, p.get("asset_id"))
         if method == "project.import":
             from .importing import import_package
-
-            return import_package(p["base64"], self.assets, self.projects)
+            with self.jobs.lock:
+                self.jobs.require_idle()
+                return import_package(p["base64"], self.assets, self.projects)
         if method == "model.repair":
             project = self.projects.get(p["id"])
             return self.generate(project["id"], project["spec"], repair=True)
@@ -233,7 +273,88 @@ class Service:
         if method == "settings.get":
             return self.settings.public() | self.runtime_status()
         if method == "settings.unlock":
-            return self.settings.unlock(p["pin"])
+            action = p.get("action")
+            pin = p.get("pin")
+            token = p.get("token")
+
+            # 1. 独立打印密码校验通道：启动实机制造完全与家长主密码解耦
+            if action == "bambu_print":
+                print_pin = p.get("print_pin") or pin
+                if not print_pin:
+                    raise DomainError("启动实机制造必须输入专属打印密码。")
+                self.settings.verify_print_pin(print_pin)
+
+                project_id = p.get("project_id") or p.get("id")
+                if not project_id:
+                    raise DomainError("缺少工程 ID。")
+                project = self.projects.get(project_id)
+                slicing = project.get("slicing")
+                if not slicing or not slicing.get("asset_id"):
+                    raise DomainError("项目尚未完成切片，请先在打印制造站生成切片后再发送打印。")
+                asset_id = slicing["asset_id"]
+                asset_path = self.assets.path(asset_id)
+                filename = f"{project.get('name', 'yaha')}.gcode.3mf"
+                res = self.bambu.print_project(asset_path, filename)
+                self.projects.update(project_id, printed=True)
+                return {
+                    "bambu": res,
+                    "project": self.projects.get(project_id),
+                    "status": self.bambu.status(),
+                }
+
+            if action == "bambu_control":
+                print_pin = p.get("print_pin") or pin
+                if print_pin:
+                    self.settings.verify_print_pin(print_pin)
+                elif token:
+                    self.settings.require(token)
+                else:
+                    raise DomainError("操作实机必须输入打印密码。")
+                res = self.bambu.control(p["command"])
+                return {"control": res, "status": self.bambu.status()}
+
+            # 2. 家长设置管理通道（修改打印密码、登录拓竹、查看设备等需要家长主密码）
+            if pin is not None:
+                unlock_res = self.settings.unlock(pin, p.get("new_pin"))
+            elif token:
+                self.settings.require(token)
+                unlock_res = {"token": token}
+            else:
+                raise DomainError("请输入家长密码解锁。")
+
+            if not action:
+                return unlock_res
+
+            if action == "set_print_pin":
+                new_print_pin = p.get("new_print_pin")
+                if not new_print_pin:
+                    raise DomainError("请输入新的专属打印密码。")
+                res = self.settings.set_print_pin(new_print_pin)
+                return unlock_res | res
+
+            if action == "bambu_login":
+                res = self.bambu.login(
+                    p["account"],
+                    p["password"],
+                    p.get("code"),
+                    p.get("region", "cn"),
+                )
+                return unlock_res | {"bambu": res, "status": self.bambu.status()}
+
+            if action == "bambu_logout":
+                res = self.bambu.logout()
+                return unlock_res | {"bambu": res, "status": self.bambu.status()}
+
+            if action == "bambu_devices":
+                devices = self.bambu.list_devices()
+                return unlock_res | {"devices": devices, "status": self.bambu.status()}
+
+            if action == "bambu_select":
+                self.bambu.select_device(p["dev_id"])
+                return unlock_res | {"status": self.bambu.status()}
+
+            raise DomainError(f"未知的安全操作：{action}")
+
         if method == "settings.update":
             return self.settings.update(p.get("token", ""), p["values"]) | self.runtime_status()
         if method == "workshop.templates":

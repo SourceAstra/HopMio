@@ -9,9 +9,18 @@ from ..contracts import DomainError, Mode
 from ..geometry.images import contour, heights
 from ..geometry.models import load_mesh
 from ..reconstruction.preparing import prepare as prepare_surface
+from .mesh_editing import source_inputs
 
 
 def prepare(spec, assets, repair=False, *, job=None, observer=None, adjustment_intent=None):
+    if spec.mode in (Mode.SILHOUETTE, Mode.RELIEF) and not (spec.modeling_plan and spec.modeling_plan.source_mesh):
+        if not spec.asset_ids:
+            raise DomainError("请先选择图片或模型。")
+        path = assets.path(spec.asset_ids[0])
+        if spec.mode == Mode.SILHOUETTE:
+            step = {"id": "silhouette", "name": "照片轮廓", "shape": "polygon", "operation": "add", "size_mm": [spec.width_mm, spec.height_mm, spec.thickness_mm], "center_mm": [0, 0, 0], "rotation_deg": [90, 0, 0], "points": contour(path), "bevel_mm": 0}
+            return {"plan": {"steps": [step], "constraints": []}, "finish": finish(spec)}, {}, None
+        return {"heightmap": heights(path, spec.relief_kind == "lithophane", spec.width_mm, spec.height_mm), "size_mm": [spec.width_mm, spec.height_mm, spec.thickness_mm], "finish": finish(spec)}, {}, None
     if spec.provider == "reconstruction":
         return prepare_surface(spec, assets, job=job, observer=observer)
     if spec.provider == "parametric":
@@ -22,9 +31,13 @@ def prepare(spec, assets, repair=False, *, job=None, observer=None, adjustment_i
             raise DomainError("方案没有可复测的尺寸约束，请重新设计。", "PLAN_MEASUREMENT")
         request = {"plan": compile_plan(plan)}
         validate_intent(spec, plan, request["plan"], adjustment_intent)
-        if plan.surface:
-            request["finish"] = {"base": spec.base and not any(step.id == "base" for step in plan.steps), "hole": False, "thickness_mm": spec.bottom_mm, "footprint": True}
-        return request, lettering_inputs(request["plan"]), plan
+        has_base = any(step.id == "base" and step.operation == "add" for step in plan.steps)
+        has_hole = any(step.operation == "subtract" and ("hole" in step.id.lower() or "孔" in step.name) for step in plan.steps)
+        request["finish"] = finish(spec) | {"base": spec.base and not has_base, "hole": spec.hole and not has_hole, "thickness_mm": spec.bottom_mm, "footprint": bool(plan.surface)}
+        inputs = lettering_inputs(request["plan"])
+        if plan.source_mesh:
+            inputs.update(source_inputs(request["plan"], assets))
+        return request, inputs, plan
     if spec.mode == Mode.TEXT:
         if spec.asset_ids:
             raise DomainError("参数模板不会处理照片。请切换到 AI 参数建模，先设计照片方案。", "PLAN_REQUIRED")
@@ -32,13 +45,8 @@ def prepare(spec, assets, repair=False, *, job=None, observer=None, adjustment_i
         return {"plan": compile_plan(plan), "finish": finish(spec)}, {}, plan
     if not spec.asset_ids:
         raise DomainError("请先选择图片或模型。")
-    path = assets.path(spec.asset_ids[0])
-    if spec.mode == Mode.SILHOUETTE:
-        step = {"id": "silhouette", "name": "照片轮廓", "shape": "polygon", "operation": "add", "size_mm": [spec.width_mm, spec.height_mm, spec.thickness_mm], "center_mm": [0, 0, 0], "rotation_deg": [90, 0, 0], "points": contour(path), "bevel_mm": 0}
-        return {"plan": {"steps": [step], "constraints": []}, "finish": finish(spec)}, {}, None
-    if spec.mode == Mode.RELIEF:
-        return {"heightmap": heights(path, spec.relief_kind == "lithophane"), "size_mm": [spec.width_mm, spec.height_mm, spec.thickness_mm], "finish": finish(spec)}, {}, None
     if spec.mode == Mode.IMPORT:
+        path = assets.path(spec.asset_ids[0])
         asset = assets.db.get("assets", spec.asset_ids[0])
         if path.suffix == ".glb":
             scale = 0.001 if asset.get("kind") != "model-input" and asset.get("units", "mm") == "mm" else 1

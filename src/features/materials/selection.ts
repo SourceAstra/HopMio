@@ -2,6 +2,16 @@ import type { Mode, Spec } from '../../types';
 import { isPhotoMode, providerForMode } from '../../theme/modes';
 
 export function selectMaterials(spec: Spec, asset_ids: string[], mode?: Mode): Spec {
+  if (spec.modeling_plan?.source_mesh && !mode) {
+    const plan = spec.modeling_plan;
+    return {
+      ...spec, asset_ids, provider: 'parametric',
+      modeling_plan: { ...plan, source_asset_ids: asset_ids, reference_views: (plan.reference_views || []).flatMap((view) => {
+        const index = asset_ids.indexOf(plan.source_asset_ids[view.photo_index]);
+        return index < 0 ? [] : [{ ...view, photo_index: index }];
+      }) },
+    };
+  }
   let targetMode = mode;
   if (!targetMode) {
     if (asset_ids.length > 0) {

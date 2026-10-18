@@ -10,15 +10,17 @@ export function ExportButtons() {
     s.act(async () => {
       if (!s.project) return;
       const asset = await call<Asset>('project.export', { id: s.project.id, format });
-      await download(
-        asset.id,
+      const filename =
         s.project.name +
-          (format === 'source_glb'
-            ? '.source.glb'
-            : format === 'manufacturing_glb'
-              ? '.manufacturing.glb'
-              : '.' + format),
-      );
+        (format === 'source_glb'
+          ? '.source.glb'
+          : format === 'manufacturing_glb'
+            ? '.manufacturing.glb'
+            : '.' + format);
+      const res = await download(asset.id, filename);
+      if (res?.saved) {
+        s.setNotice(`已成功将 ${filename} 保存到您的本地设备！`);
+      }
     });
   return (
     <>

@@ -20,16 +20,22 @@ func main() {
 }
 
 func run() error {
-	port := flag.Int("port", 5173, "HTTP 服务监听端口")
-	dataDir := flag.String("data", ".state", "状态持久化目录")
-	webDir := flag.String("web", "dist", "前端静态资源目录")
-	flag.Parse()
-
 	// 转换为绝对路径
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("无法获取当前工作目录: %w", err)
 	}
+
+	// 探测前端静态资源目录优先级：命令行指定 > .artifacts/web > dist
+	defaultWeb := "dist"
+	if _, err := os.Stat(filepath.Join(cwd, ".artifacts", "web")); err == nil {
+		defaultWeb = filepath.Join(".artifacts", "web")
+	}
+
+	port := flag.Int("port", 5173, "HTTP 服务监听端口")
+	dataDir := flag.String("data", ".state", "状态持久化目录")
+	webDir := flag.String("web", defaultWeb, "前端静态资源目录")
+	flag.Parse()
 
 	absData := *dataDir
 	if !filepath.IsAbs(absData) {

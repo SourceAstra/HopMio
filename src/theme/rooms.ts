@@ -21,8 +21,8 @@ export const rooms = [
   { id: 'desk', name: '造物桌', icon: Armchair, hint: '让想法长出形状' },
   { id: 'materials', name: '取材角', icon: Images, hint: '照片、画与灵感' },
   { id: 'check', name: '模型体检室', icon: ShieldCheck, hint: '给作品做个检查' },
-  { id: 'prepare', name: '打印准备台', icon: Package, hint: '打包带去打印' },
-  { id: 'print', name: '打印站', icon: Printer, hint: '和家长一起制造' },
+  { id: 'prepare', name: '打印制造站', icon: Package, hint: '切片准备与拓竹云打印' },
+  { id: 'print', name: '打印制造站', icon: Printer, hint: '切片准备与拓竹实机云打印' },
   { id: 'library', name: '作品柜', icon: Library, hint: '每次尝试都值得留下' },
   { id: 'gallery', name: '乌萨奇展厅', icon: Sparkles, hint: '每个作品都有故事' },
   { id: 'workshop', name: '小屋工坊', icon: Wrench, hint: '我也能修改软件' },
@@ -60,6 +60,15 @@ export const navCategories: NavCategory[] = [
     defaultRoom: 'desk',
   },
   {
+    id: 'inspirations',
+    name: '灵感宝箱',
+    tagline: '奇思妙想 · 灵感手账',
+    icon: Lightbulb,
+    badge: '灵感',
+    rooms: ['inspirations'],
+    defaultRoom: 'inspirations',
+  },
+  {
     id: 'inspiration',
     name: '取材角',
     tagline: '照片素材 · 模型导入',
@@ -72,8 +81,8 @@ export const navCategories: NavCategory[] = [
     name: '体检制造',
     tagline: '模型体检 · 切片与打印',
     icon: Hammer,
-    rooms: ['check', 'prepare', 'print'],
-    defaultRoom: 'check',
+    rooms: ['check', 'print'],
+    defaultRoom: 'print',
   },
   {
     id: 'showcase',
@@ -92,4 +101,14 @@ export const navCategories: NavCategory[] = [
     rooms: ['workshop'],
     defaultRoom: 'workshop',
   },
+  {
+    id: 'settings',
+    name: '家长与设置',
+    tagline: '守护控制台 · 隐私与引擎',
+    icon: Settings,
+    badge: '设置',
+    rooms: ['settings'],
+    defaultRoom: 'settings',
+  },
 ];
+

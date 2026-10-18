@@ -39,7 +39,7 @@ def design(spec, assets, job, observer: PhotoObserver | None = None, *, progress
     for index, asset_id in enumerate(spec.asset_ids):
         job.check()
         asset = assets.db.get("assets", asset_id)
-        if not asset or asset["kind"] != "image":
+        if not asset or (asset.get("kind") != "image" and asset.get("extension") not in {".png", ".jpg", ".jpeg", ".webp"}):
             raise DomainError("表面重建只接受照片，请移除模型文件。", "RECONSTRUCTION_PHOTOS")
         total += asset["bytes"]
         if total > config["max_input_mb"] * 1024 * 1024:
@@ -58,7 +58,9 @@ def design(spec, assets, job, observer: PhotoObserver | None = None, *, progress
     parameters = {key: {"value": value, "label": label, "unit": unit} for key, (value, label, unit) in values.items()}
     reference = None
     if spec.reconstruction_plan:
-        parameters = spec.reconstruction_plan.parameters
+        parameters = {name: parameter.model_copy() for name, parameter in spec.reconstruction_plan.parameters.items()}
+        parameters["height"].value = spec.height_mm
+        parameters["base_h"].value = parameters["base_h"].value or 4 if spec.base else 0
         reference = spec.reconstruction_plan.scale_reference
         if reference and reference.asset_id != spec.asset_ids[0]:
             reference = None

@@ -117,14 +117,28 @@ class Constraint(Contract):
     max_error_mm: float = Field(default=0.01, gt=0, le=0.1)
 
 
+class MeshSource(Contract):
+    asset_id: str = Field(min_length=1, max_length=80)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    scale: Scalar = 1
+
+
+class PlanOptions(Contract):
+    base: bool
+    hole: bool
+    hole_shape: Literal["round", "heart"]
+
+
 class GeometryPlan(Contract):
-    schema_version: Literal[3, 4, 5, 6] = 6
+    schema_version: Literal[3, 4, 5, 6, 7] = 7
     title: str = Field(min_length=1, max_length=80)
     source_prompt: str = Field(default="", max_length=3000)
     source_asset_ids: list[str] = Field(default_factory=list, max_length=96)
     model_label: str = Field(default="", max_length=100)
     parameters: dict[Identifier, Parameter] = Field(min_length=1, max_length=48)
-    steps: list[GeometryStep] = Field(min_length=1, max_length=48)
+    steps: list[GeometryStep] = Field(default_factory=list, max_length=48)
+    source_mesh: MeshSource | None = None
+    source_options: PlanOptions | None = None
     surface: SculptFinish | None = None
     reference_views: list[ReferenceView] = Field(default_factory=list, max_length=96)
     constraints: list[Constraint] = Field(default_factory=list, max_length=32)
@@ -155,7 +169,11 @@ class GeometryPlan(Contract):
 
     @model_validator(mode="after")
     def identity(self):
-        if self.steps[0].operation != "add":
+        if not self.steps and not self.source_mesh:
+            raise ValueError("方案需要原始网格或至少一个实体步骤")
+        if self.source_mesh and (self.schema_version < 7 or self.surface):
+            raise ValueError("原始网格编辑须使用 v7 且 surface=null，保留源网格细节")
+        if not self.source_mesh and self.steps[0].operation != "add":
             raise ValueError("第一步必须添加实体")
         ids = [step.id for step in self.steps]
         if len(set(ids)) != len(ids):

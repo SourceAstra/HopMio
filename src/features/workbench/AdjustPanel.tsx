@@ -1,16 +1,12 @@
-import {
-  SlidersHorizontal,
-  RotateCcw,
-  Scissors,
-  Blocks,
-  X,
-  Layers,
-} from 'lucide-react';
+import { SlidersHorizontal, RotateCcw, Scissors, Blocks, X, Layers } from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
 import { ParameterEditor } from '../modeling/ParameterEditor';
 import type { Spec } from '../../types';
 import { QualityReport } from '../reconstruction/QualityReport';
 import { isPhotoMode } from '../../theme/modes';
+import { patchDimensions } from '../modeling/dimensions';
+import { ReconstructionDetails } from '../reconstruction/ReconstructionDetails';
+import { useState } from 'react';
 
 interface AdjustPanelProps {
   selectedPartId?: string | null;
@@ -26,7 +22,8 @@ export function AdjustPanel({
   onClose,
 }: AdjustPanelProps = {}) {
   const s = useStudio();
-  const patch = (data: Partial<Spec>) => s.setSpec((old) => ({ ...old, ...data }));
+  const patch = (data: Partial<Spec>) => s.setSpec((old) => patchDimensions(old, data));
+  const [showPhotoDetails, setShowPhotoDetails] = useState(false);
   const selectedPart = s.spec.modeling_plan?.steps.find((step) => step.id === selectedPartId);
 
   const field = (
@@ -60,6 +57,19 @@ export function AdjustPanel({
         />
         <small>{unit}</small>
       </div>
+      {isPhotoMode(s.spec.mode) && (
+        <section className="panel">
+          <h2>照片与尺度</h2>
+          <p className="muted">原尺寸还原需要实物标尺；没有标尺时按所设高度等比制作。</p>
+          <button
+            className="secondary"
+            disabled={s.busy || s.running}
+            onClick={() => setShowPhotoDetails(true)}
+          >
+            主体范围、标尺与造物方式
+          </button>
+        </section>
+      )}
     </label>
   );
 
@@ -117,7 +127,7 @@ export function AdjustPanel({
                 checked={s.spec.base}
                 onChange={(e) => patch({ base: e.target.checked })}
               />
-              <strong>加厚稳固打印基座 (Bed Plate)</strong>
+              <strong>附加制造底座</strong>
             </label>
             <div className="tuning-metric-row">
               <span>首层接触检查</span>
@@ -132,7 +142,10 @@ export function AdjustPanel({
       )}
 
       {/* 参数调校面板 */}
-      {(activeStage === 2 || activeStage === null || !isPhotoMode(s.spec.mode)) && (
+      {(activeStage === 2 ||
+        activeStage === 4 ||
+        activeStage === null ||
+        !isPhotoMode(s.spec.mode)) && (
         <section className="panel">
           <div className="panel-title">
             <h2>
@@ -147,7 +160,7 @@ export function AdjustPanel({
             </button>
           </div>
 
-          {s.spec.provider === 'parametric' ? (
+          {s.spec.provider === 'parametric' || s.spec.provider === 'reconstruction' ? (
             <>
               <ParameterEditor selectedPartId={selectedPartId} />
               {(selectedPart || selectedPointMm) && (
@@ -161,17 +174,6 @@ export function AdjustPanel({
                   )}
                 </div>
               )}
-              <div className="adjust-actions">
-                <button
-                  type="button"
-                  className="primary generate adjust-apply-btn"
-                  disabled={s.running || s.busy || !s.canGenerate}
-                  onClick={() => void s.generate()}
-                  title="按修改后的参数在 Blender 重新生成模型，并由 AI 审阅实际成品"
-                >
-                  <Blocks size={15} /> {s.dirty ? '应用修改 · 重新生成模型' : '重新生成 3D 模型'}
-                </button>
-              </div>
               <p className="muted">
                 {s.spec.modeling_plan
                   ? '部件尺寸和壁厚由方案关系推导；生成后调用 AI 审阅成品，必要时提出一次修订。'
@@ -254,6 +256,21 @@ export function AdjustPanel({
       {(activeStage === 3 || activeStage === null || s.project?.model?.reconstruction) && (
         <QualityReport />
       )}
+      {s.generationBlock && (
+        <p className="surface-warning" role="status">
+          {s.generationBlock}
+        </p>
+      )}
+      <button
+        type="button"
+        className="primary generate adjust-apply-btn"
+        title={s.generationBlock || '保存为新版本'}
+        disabled={s.running || s.busy || !s.canGenerate}
+        onClick={() => void s.generate()}
+      >
+        <Blocks size={15} /> {s.dirty ? '应用修改 · 生成新版本' : '生成模型'}
+      </button>
+      {showPhotoDetails && <ReconstructionDetails onClose={() => setShowPhotoDetails(false)} />}
     </aside>
   );
 }

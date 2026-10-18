@@ -1,6 +1,7 @@
 """JSON 模型调用边界；协议策略负责请求和响应转换。"""
 
 import json
+import re
 import time
 from typing import Protocol
 from urllib.parse import urlsplit
@@ -61,6 +62,213 @@ class MessagesProtocol:
 
 
 PROTOCOLS = {"chat": ChatProtocol(), "messages": MessagesProtocol()}
+
+
+def clean_and_repair_json(text: str) -> str:
+    in_string = False
+    escape = False
+    stack = []
+    out = []
+    i = 0
+    n = len(text)
+    while i < n:
+        char = text[i]
+        if escape:
+            escape = False
+            out.append(char)
+            i += 1
+            continue
+        if char == "\\":
+            if in_string:
+                escape = True
+            out.append(char)
+            i += 1
+            continue
+        if in_string:
+            if char == "\"":
+                in_string = False
+            out.append(char)
+            i += 1
+            continue
+        if char == "\"":
+            if stack and stack[-1] == "[":
+                if re.match(r'^\"[a-zA-Z0-9_]+\"\s*:', text[i:]):
+                    out.append("{")
+                    stack.append("{_implicit}")
+            in_string = True
+            out.append(char)
+            i += 1
+            continue
+        if char == "{":
+            stack.append("{")
+            out.append(char)
+            i += 1
+            continue
+        if char == "}":
+            if stack and stack[-1] == "{_implicit}":
+                out.append("}")
+                stack.pop()
+            if stack and stack[-1] == "{":
+                stack.pop()
+            out.append(char)
+            i += 1
+            continue
+        if char == "[":
+            stack.append("[")
+            out.append(char)
+            i += 1
+            continue
+        if char == "]":
+            if stack and stack[-1] == "{_implicit}":
+                out.append("}")
+                stack.pop()
+            if stack and stack[-1] == "[":
+                stack.pop()
+            out.append(char)
+            i += 1
+            continue
+        if char == ",":
+            if stack and stack[-1] == "{_implicit}":
+                out.append("}")
+                stack.pop()
+            j = i + 1
+            while j < n and text[j] in " \t\r\n":
+                j += 1
+            if j < n and text[j] in "}]":
+                i = j
+                continue
+            out.append(char)
+            i += 1
+            continue
+        out.append(char)
+        i += 1
+    while stack and stack[-1] == "{_implicit}":
+        out.append("}")
+        stack.pop()
+    return "".join(out)
+
+
+def close_truncated_json(s: str) -> str:
+    in_string = False
+    escape = False
+    stack = []
+    i = 0
+    while i < len(s):
+        char = s[i]
+        if escape:
+            escape = False
+            i += 1
+            continue
+        if char == "\\":
+            if in_string:
+                escape = True
+            i += 1
+            continue
+        if char == "\"":
+            in_string = not in_string
+            i += 1
+            continue
+        if not in_string:
+            if char in "{[":
+                stack.append(char)
+            elif char == "}" and stack and stack[-1] == "{":
+                stack.pop()
+            elif char == "]" and stack and stack[-1] == "[":
+                stack.pop()
+        i += 1
+    if in_string:
+        s += "\""
+    s = s.rstrip()
+    while True:
+        cleaned = re.sub(r",\s*\"[^\"]*\"\s*:\s*$", "", s)
+        cleaned = re.sub(r",\s*\"[^\"]*\"$", "", cleaned)
+        cleaned = re.sub(r"[,:\s]+$", "", cleaned)
+        if cleaned == s:
+            break
+        s = cleaned
+    in_string = False
+    escape = False
+    stack = []
+    for char in s:
+        if escape:
+            escape = False
+            continue
+        if char == "\\":
+            if in_string:
+                escape = True
+            continue
+        if char == "\"":
+            in_string = not in_string
+            continue
+        if not in_string:
+            if char in "{[":
+                stack.append(char)
+            elif char == "}" and stack and stack[-1] == "{":
+                stack.pop()
+            elif char == "]" and stack and stack[-1] == "[":
+                stack.pop()
+    closing = ["}" if op == "{" else "]" for op in reversed(stack)]
+    return s + "".join(closing)
+
+
+def extract_json_object(text: str) -> dict:
+    text = text.strip()
+    if "<think>" in text and "</think>" in text:
+        text = text.split("</think>", 1)[1].strip()
+    if "```" in text:
+        parts = text.split("```")
+        for i in range(1, len(parts), 2):
+            block = parts[i]
+            if block.startswith("json"):
+                block = block[4:]
+            block = block.strip()
+            if "{" in block:
+                text = block
+                break
+    start = text.find("{")
+    if start == -1:
+        raise ValueError("未找到有效 JSON 对象")
+    decoder = json.JSONDecoder()
+    try:
+        obj, _ = decoder.raw_decode(text[start:])
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    end = text.rfind("}")
+    if end != -1 and end > start:
+        try:
+            obj = json.loads(text[start : end + 1])
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+    repaired = clean_and_repair_json(text[start:])
+    try:
+        obj, _ = decoder.raw_decode(repaired)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    end = repaired.rfind("}")
+    if end != -1:
+        try:
+            obj = json.loads(repaired[: end + 1])
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+    closed = close_truncated_json(repaired)
+    try:
+        obj = json.loads(closed)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    obj = json.loads(text)
+    if not isinstance(obj, dict):
+        raise ValueError("需要 JSON 对象")
+    return obj
 
 
 class CloudJSONClient:
@@ -129,11 +337,7 @@ class CloudJSONClient:
                                 raise DomainError(f"AI 响应数据超过接收上限（{receive['max_wire_bytes'] // 1048576} MB），不是对话上下文超限。请检查服务响应或 config/ai.yaml。", "AI_RESPONSE_LIMIT")
                         text = protocol.text(json.loads(content)).strip()
                         decoder.append(text)
-            if text.startswith("```") and text.endswith("```"):
-                text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-            result = json.loads(text)
-            if not isinstance(result, dict):
-                raise ValueError("需要 JSON 对象")
+            result = extract_json_object(text)
             report("complete")
             return result
         except DomainError as error:

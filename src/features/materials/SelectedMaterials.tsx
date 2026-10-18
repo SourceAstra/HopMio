@@ -4,6 +4,7 @@ import { assetUrl } from '../../api/client';
 import { useStudio } from '../../state/StudioContext';
 import { selectMaterials } from './selection';
 import { isPhotoMode } from '../../theme/modes';
+import { isImageAsset } from './folders';
 
 interface SelectedMaterialsProps {
   compact?: boolean;
@@ -19,7 +20,7 @@ export function SelectedMaterials({
   const s = useStudio();
   const [isWallOpen, setIsWallOpen] = useState(false);
   const photos = s.spec.mode !== 'import';
-  const minimum = s.preferences?.reconstruction?.min_photos || 8;
+  const minimum = s.preferences?.reconstruction?.min_photos || 3;
   const count = s.spec.asset_ids.length;
   const change = (ids: string[]) => s.setSpec((old) => selectMaterials(old, ids));
   if (!count) return null;
@@ -80,7 +81,7 @@ export function SelectedMaterials({
                   }
                 }}
               >
-                {asset?.kind === 'image' ? (
+                {isImageAsset(asset) ? (
                   <img src={assetUrl(id)} alt={name} />
                 ) : (
                   <Images size={24} />

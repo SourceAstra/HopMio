@@ -8,7 +8,6 @@ export function QualityReport() {
   const report = reconstructionReport(s.project?.model, currentJob);
   const diagnostics = currentJob?.reconstruction_diagnostics;
   const matching = currentJob?.photo_matching;
-  if (isPhotoMode(s.spec.mode) && s.spec.provider === 'parametric') return null;
   if (!report && !diagnostics && !matching) return null;
   return (
     <section className="panel reconstruction-report">

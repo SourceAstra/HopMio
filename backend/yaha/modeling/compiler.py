@@ -12,7 +12,7 @@ OPERATORS = {"add": operator.add, "subtract": operator.sub, "multiply": operator
 
 
 def compiled_geometry(compiled):
-    return ([{key: value for key, value in step.items() if key != "name"} for step in compiled["steps"]], compiled["surface"])
+    return ([{key: value for key, value in step.items() if key != "name"} for step in compiled["steps"]], compiled["surface"], compiled.get("source_mesh"))
 
 
 def value(item, parameters, depth=0):
@@ -164,4 +164,10 @@ def compile_plan(plan):
             raise DomainError("等比制作的参考造型只约束成品高度；结构件请保留精确实体模式。", "PLAN_MEASUREMENT")
         if not any(rule["feature"] == "model.height" and abs(rule["expected_mm"] - surface["height_mm"]) < 1e-6 for rule in constraints):
             raise DomainError("参考造型须约束与曲面设置一致的成品高度。", "PLAN_MEASUREMENT")
-    return {"schema_version": plan.schema_version, "steps": steps, "constraints": constraints, "surface": surface, "reference_views": [view.model_dump() for view in plan.reference_views]}
+    source = None
+    if plan.source_mesh:
+        scale = resolve(plan.source_mesh.scale, plan.parameters, "ratio")
+        if not 0.01 <= scale <= 100:
+            raise DomainError("原始网格的缩放比例须在0.01–100倍以内。", "PLAN_RANGE")
+        source = plan.source_mesh.model_dump() | {"scale": scale}
+    return {"schema_version": plan.schema_version, "steps": steps, "constraints": constraints, "surface": surface, "source_mesh": source, "reference_views": [view.model_dump() for view in plan.reference_views]}

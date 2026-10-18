@@ -4,6 +4,7 @@ import { useStudio } from '../../state/StudioContext';
 import { ReconstructionDetails } from '../reconstruction/ReconstructionDetails';
 import { ShapeDetails } from './ShapeDetails';
 import { hasCurrentPlan } from './plan';
+import { patchDimensions } from './dimensions';
 
 export function PhotoBuildButton({ compact = false }: { compact?: boolean }) {
   const s = useStudio();
@@ -55,7 +56,7 @@ export function PhotoControls() {
     setHeightStr(sanitized);
     const num = parseInt(sanitized, 10);
     if (!isNaN(num) && num >= 10 && num <= 500) {
-      s.setSpec((old) => ({ ...old, height_mm: num }));
+      s.setSpec((old) => patchDimensions(old, { height_mm: num }));
     }
   };
 
@@ -67,12 +68,12 @@ export function PhotoControls() {
       num = 500;
     }
     setHeightStr(String(num));
-    s.setSpec((old) => ({ ...old, height_mm: num }));
+    s.setSpec((old) => patchDimensions(old, { height_mm: num }));
   };
 
   const setPresetHeight = (h: number) => {
     setHeightStr(String(h));
-    s.setSpec((old) => ({ ...old, height_mm: h }));
+    s.setSpec((old) => patchDimensions(old, { height_mm: h }));
   };
 
   return (

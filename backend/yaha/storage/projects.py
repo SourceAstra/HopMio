@@ -45,27 +45,31 @@ class Projects:
             [self.get(p["id"]) for p in self.db.list("projects")], key=lambda p: p["updated_at"], reverse=True
         )
 
-    def revision(self, identifier, spec, model, reason):
+    def revision(self, identifier, spec, model, reason, *, activate=True, revision_identifier=None):
         project = self.get(identifier)
         revision = {
-            "id": str(uuid.uuid4()),
+            "id": revision_identifier or str(uuid.uuid4()),
             "project_id": identifier,
             "parent_id": project["revision_id"],
             "spec": spec,
             "model": model,
             "reason": reason[:200],
             "created_at": now(),
+            "status": "draft" if not activate else "saved",
         }
-        project.update(
-            spec=spec,
-            model=model,
-            revision_id=revision["id"],
-            revision_count=project["revision_count"] + 1,
-            updated_at=now(),
-            validation=None,
-            printed=False,
-            slicing=None,
-        )
+        if activate:
+            project.update(
+                spec=spec,
+                model=model,
+                revision_id=revision["id"],
+                revision_count=project["revision_count"] + 1,
+                updated_at=now(),
+                validation=None,
+                printed=False,
+                slicing=None,
+            )
+        else:
+            project.update(revision_count=project["revision_count"] + 1, updated_at=now())
         with self.db.transaction() as conn:
             conn.execute(
                 "INSERT INTO revisions(id,project_id,data) VALUES(?,?,?)",

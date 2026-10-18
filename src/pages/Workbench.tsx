@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Box, Layers, Images, Sparkles, Download, Clock3 } from 'lucide-react';
+import { ArrowRight, Box, Layers, Images, Sparkles, Download, Clock3, Printer, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
 import { isModelDraft, isGeometryOnly, reconstructionReport } from '../features/modeling/quality';
 import { GeometryReviewNotice } from '../features/modeling/GeometryReviewNotice';
-import { call, assetUrl } from '../api/client';
+import { call, assetUrl, download } from '../api/client';
 import { IdeaPanel } from '../features/workbench/IdeaPanel';
 import { AdjustPanel } from '../features/workbench/AdjustPanel';
 import { History } from '../features/projects/History';
@@ -12,30 +12,54 @@ import { Usagi } from '../components/Usagi';
 import { PhotoComparison } from '../features/reconstruction/PhotoComparison';
 import { MultiViewComparison } from '../features/reconstruction/MultiViewComparison';
 import { PipelineEnergyRail } from '../features/workbench/PipelineEnergyRail';
-import { isPhotoMode } from '../theme/modes';
-import type { Model } from '../types';
+import { isPhotoMode, providerForMode } from '../theme/modes';
+import { WorkbenchHeader } from '../features/workbench/WorkbenchHeader';
+import { WorkbenchStagePlaceholder } from '../features/workbench/WorkbenchStagePlaceholder';
+import { HeroCraftHome } from '../features/workbench/HeroCraftHome';
+import { CraftLaunchModal, type LaunchParams } from '../features/workbench/CraftLaunchModal';
+import type { Model, Asset, Mode, Spec } from '../types';
+import { isImageAsset } from '../features/materials/folders';
 
 export function Workbench() {
   const s = useStudio();
-  const hasPhotos = (s.spec.asset_ids || []).length > 0;
+  const photoIds = s.spec.asset_ids.filter((id) => isImageAsset(s.assets.find((asset) => asset.id === id)));
+  const hasPhotos = photoIds.length > 0;
 
   // 核心视口状态：阶段 B 工业精修 | 阶段 A 扫描裸网格 | 多视角实物比对 | 纹理外观
-  // 实体生成过程中默认自动切换为多视角实物视角
-  const [view, setView] = useState<'stageB' | 'stageA' | 'multiview' | 'original'>(() => {
-    return (s.spec.asset_ids || []).length > 0 && s.running ? 'multiview' : 'stageB';
-  });
+  const [view, setView] = useState<'stageB' | 'stageA' | 'multiview' | 'original'>('stageB');
 
   const [inspectAssetId, setInspectAssetId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [selectedPointMm, setSelectedPointMm] = useState<[number, number, number] | null>(null);
-  const [inspectStage, setInspectStage] = useState<number | null>(null);
+  const [inspectStage, setInspectStage] = useState<number | null>(() => window.innerWidth > 1400 ? 2 : null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [activePane, setActivePane] = useState<'model' | 'chat' | 'parameters'>('model');
+
+  // 3D 视口抽屉状态：默认在首页大聊天框时收起，当推演中或用户点击浮标时呼出
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   const selectionRevision = useRef(s.project?.revision_id);
   const prevRunningRef = useRef(s.running);
 
-  // 监听实体生成生命周期：当实体生成开始时，若有参考照片，默认自动切换为多视角实物对比视角
+  // 监听实体生成生命周期：当任务运行时自动展开 3D 抽屉以便用户实时查看
   useEffect(() => {
-    if (!prevRunningRef.current && s.running && hasPhotos) {
+    if (s.running) {
+      setIsDrawerOpen(true);
+    }
+  }, [s.running]);
+
+  // 监听返回首页事件 (点击 Logo 时一键收起 3D 抽屉回到纯净大聊天框)
+  useEffect(() => {
+    const handleResetHome = () => {
+      setIsDrawerOpen(false);
+    };
+    window.addEventListener('yaha-reset-home', handleResetHome);
+    return () => window.removeEventListener('yaha-reset-home', handleResetHome);
+  }, []);
+
+  // 监听实体生成生命周期：当实体生成完成时，若有参考照片，默认自动切换为多视角实物对比视角
+  useEffect(() => {
+    if (prevRunningRef.current && !s.running && hasPhotos) {
       setView('multiview');
     }
     prevRunningRef.current = s.running;
@@ -69,40 +93,135 @@ export function Workbench() {
       ? saved?.source_glb_id
       : draft?.glb_id || saved?.manufacturing_glb_id || model?.glb_id || saved?.glb_id;
 
-  return (
-    <div className="workbench-page-wrapper">
-      {/* 头部标题与乌萨奇伴随向导 */}
-      <header className="workbench-heading compact">
-        <div className="workbench-title-group">
-          <h1>
-            造物桌 <span>✦</span>
-          </h1>
-          <p className="workbench-slogan">别动脑，喊出你的想法 — 剩下的交给乌萨奇</p>
-        </div>
-        <div className="workbench-heading-actions">
-          <button
-            className="header-checkup-btn"
-            disabled={s.busy || s.running || s.dirty || !s.project?.model}
-            onClick={() => void s.check()}
-            title="去模型体检室进行水密性复检与切片打印"
-          >
-            去模型体检室 <ArrowRight size={14} />
-          </button>
-          <div className="desk-companion">
-            <Usagi size={30} />
-          </div>
-        </div>
-      </header>
+  // 首页造物启程过渡卡状态 (命名与任务感知仲裁)
+  const [launchModalOpen, setLaunchModalOpen] = useState(false);
+  const [launchParams, setLaunchParams] = useState<LaunchParams | null>(null);
 
-      {/* A+B 深度逆向制造管线能量轨 */}
-      <PipelineEnergyRail
-        activeStage={inspectStage}
-        onSelectStage={(stage) => setInspectStage((prev) => (prev === stage ? null : stage))}
+  // 从首页大聊天框发起造物 -> 呼出造物启程过渡卡 (不直接硬切，给用户命名与冲突感知)
+  const handleStartCraftFromHome = (params: LaunchParams) => {
+    setLaunchParams(params);
+    setLaunchModalOpen(true);
+  };
+
+  // 用户在过渡卡确认开启新造物 (必定创建新作品，且直达造物桌自动开工)
+  const handleConfirmLaunch = async (finalProjectName: string) => {
+    if (!launchParams) return;
+
+    // 1. 若当前后台正有旧任务，先终止旧任务
+    if (s.running && s.job) {
+      await s.cancelCurrentJob();
+    }
+
+    // 2. 构筑全新干净的造物 Spec
+    const nextSpec: Spec = {
+      ...s.spec,
+      mode: launchParams.mode,
+      prompt: launchParams.prompt,
+      asset_ids: launchParams.assetIds,
+      provider: providerForMode(launchParams.mode),
+    };
+    s.setSpec(nextSpec);
+
+    // 3. 首页发起的，必定是发起一个新作品
+    const newProject = await s.create(nextSpec, finalProjectName);
+
+    // 4. 关闭过渡卡，打开 3D 抽屉
+    setLaunchModalOpen(false);
+    setIsDrawerOpen(true);
+
+    // 5. 立即开启造物雕刻流程 (直接触发生成，进入造物桌直接开工，无需二次回车)
+    if (newProject?.id) {
+      await s.generate(undefined, nextSpec, newProject.id);
+    }
+  };
+
+  // 用户在过渡卡选择取消本次，继续查看当前已有雕刻
+  const handleInspectCurrentJob = async () => {
+    setLaunchModalOpen(false);
+    await s.continueCurrentJob();
+    setIsDrawerOpen(true);
+  };
+
+  // 若 3D 抽屉收起，渲染首页大聊天框 (对齐 Mint 标杆)
+  if (!isDrawerOpen) {
+    return (
+      <div className="workbench-page-wrapper home-chat-mode">
+        <HeroCraftHome
+          onStartCraft={handleStartCraftFromHome}
+          onOpen3DDrawer={() => setIsDrawerOpen(true)}
+          hasModel={Boolean(model)}
+          isRunning={Boolean(s.running)}
+        />
+        {/* 首页造物启程过渡卡 (新作品命名 + 正在造物感知与冲突仲裁) */}
+        {launchParams && (
+          <CraftLaunchModal
+            isOpen={launchModalOpen}
+            params={launchParams}
+            onClose={() => setLaunchModalOpen(false)}
+            onConfirmLaunch={handleConfirmLaunch}
+            onInspectCurrentJob={handleInspectCurrentJob}
+            mockConflict={Boolean((window as any).__showMockConflict)}
+          />
+        )}
+        {/* 历史版本时光机弹窗 */}
+        {showHistoryModal && s.project && (
+          <History
+            project={s.project}
+            onClose={() => setShowHistoryModal(false)}
+            onSelected={() => setShowHistoryModal(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="workbench-page-wrapper drawer-3d-active">
+      {/* 1. 顶部工坊主控台身份卡与快捷动作 */}
+      <WorkbenchHeader
+        projectName={s.project?.name || '无标题造物工程'}
+        mode={s.spec.mode}
+        isDirty={s.dirty}
+        isRunning={s.running}
+        isBusy={s.busy}
+        revisionCount={s.project?.revision_count || 1}
+        hasModel={!!s.project?.model}
+        onRename={(newName) => {
+          if (s.project) {
+            void s.updateProject(s.project.id, { name: newName });
+          }
+        }}
+        onCreateNew={() => s.openNewProject()}
+        onGoToPrint={() => s.setRoom('print')}
+        onOpenHistory={() => setShowHistoryModal(true)}
+        onExportLocal={(format) => {
+          if (!s.project) return;
+          void s.act(async () => {
+            const asset = await call<Asset>('project.export', { id: s.project!.id, format });
+            const filename = s.project!.name + (format === 'usagi' ? '.usagi' : '.' + format);
+            const res = await download(asset.id, filename);
+            if (res?.saved) {
+              s.setNotice(`已成功将 ${filename} 保存到您的本地设备！`);
+            }
+          });
+        }}
       />
 
-      {/* 核心造物桌面：默认两栏宽敞布局，点击阶段展开右侧微调抽屉 */}
+      {/* A+B 深度逆向制造管线能量轨 */}
+      <details className="workbench-pipeline-details">
+        <summary>{s.running ? s.job?.message || '正在造物…' : '造物进度与技术详情'}</summary>
+        <PipelineEnergyRail activeStage={inspectStage} onSelectStage={(stage) => { setInspectStage(stage); setActivePane('parameters'); }} />
+      </details>
+      <nav className="workbench-mobile-tabs" aria-label="造物桌工作区">
+        <button aria-pressed={activePane === 'model'} onClick={() => { setActivePane('model'); setInspectStage(null); }}>模型</button>
+        <button aria-pressed={activePane === 'chat'} onClick={() => { setActivePane('chat'); setInspectStage(null); }}>对话</button>
+        <button aria-pressed={activePane === 'parameters'} onClick={() => { setInspectStage(2); setActivePane('parameters'); }}>参数</button>
+      </nav>
+
+      {/* 核心造物桌面：左侧对话微调中枢 + 右侧呼出式 3D 抽屉面板 */}
       <div
-        className={`workbench-grid full-height ${inspectStage !== null ? 'with-stage-drawer' : ''}`}
+        data-active-pane={activePane}
+        className={`workbench-grid full-height with-slide-drawer ${inspectStage !== null ? 'with-stage-drawer' : ''}`}
       >
         {/* 左栏：AI 大脑 · 视觉理解与形体规划中枢 */}
         <IdeaPanel
@@ -115,10 +234,21 @@ export function Workbench() {
           inspectAssetId={inspectAssetId}
         />
 
-        {/* 中栏：数字孪生视口 & A+B 阶段实境切换 */}
-        <section className="panel model-panel">
+        {/* 右栏抽屉：数字孪生 3D 视口 & 阶段实境 */}
+        <section className="panel model-panel slide-out-drawer">
           <div className="model-panel-heading">
             <div className="surface-view-tabs" role="group" aria-label="A+B制造管线阶段切换">
+              {/* 收起 3D 视口按钮 */}
+              <button
+                type="button"
+                className="drawer-close-toggle-btn"
+                onClick={() => setIsDrawerOpen(false)}
+                title="收起 3D 视口，返回极简大聊天框"
+              >
+                <PanelRightClose size={14} />
+                <span>收起 3D</span>
+              </button>
+
               {/* 阶段 B：工业精修实体 */}
               <button
                 aria-pressed={view === 'stageB'}
@@ -178,7 +308,9 @@ export function Workbench() {
                         ? '几何已更新 · 外观待确认'
                         : isModelDraft(saved)
                           ? '待改进草稿 · 未通过造型审阅'
-                          : '制造模型已生成'}
+                          : saved?.photo_fidelity?.status === 'observed_surface'
+                            ? '观测表面已恢复 · 待实物核对'
+                            : '制造模型已生成'}
               </span>
 
               {s.project && (
@@ -201,7 +333,17 @@ export function Workbench() {
 
           {/* 3D 视口与多视角对比主展示区 */}
           <div className="model-viewport-area">
-            {view === 'multiview' && hasPhotos ? (
+            {!activeAssetId ? (
+              <WorkbenchStagePlaceholder
+                isRunning={Boolean(s.running && s.job)}
+                job={s.job}
+                photoAssetIds={photoIds}
+                prompt={s.spec.prompt}
+                mode={s.spec.mode}
+                onFillPrompt={(text) => s.setSpec({ ...s.spec, prompt: text })}
+                onGoToMaterials={() => s.setRoom('materials')}
+              />
+            ) : view === 'multiview' && hasPhotos ? (
               <MultiViewComparison
                 model={saved || (model as Model | null)}
                 modelAssetId={activeAssetId}
@@ -247,7 +389,7 @@ export function Workbench() {
                 <button
                   type="button"
                   className="progress-cancel-btn"
-                  onClick={() => void s.act(() => call('job.cancel', { id: s.job!.id }))}
+                  onClick={() => void s.cancelCurrentJob()}
                 >
                   停止造物
                 </button>
@@ -300,26 +442,33 @@ export function Workbench() {
                   </span>
                 </div>
 
-                {/* 快速 STL 导出下载 */}
+                {/* 快速 STL 导出下载到用户侧设备 */}
                 {saved?.stl_id && (
-                  <a
-                    href={assetUrl(saved.stl_id)}
-                    download={`${s.project?.name || 'yaha-craft'}-3dprint.stl`}
+                  <button
+                    type="button"
                     className="chip-stl-download"
-                    title="一键下载 3D 打印切片专用水密 STL 文件"
+                    title="一键下载 3D 打印水密 STL 文件到本地设备"
+                    onClick={() => {
+                      void download(saved.stl_id, `${s.project?.name || 'yaha-craft'}-3dprint.stl`).then((res) => {
+                        if (res?.saved) s.setNotice('STL 模型已成功保存到您的本地设备！');
+                      });
+                    }}
                   >
                     <Download size={13} /> 导出 STL
-                  </a>
+                  </button>
                 )}
 
                 <button
                   type="button"
                   className="chip-checkup-action"
                   disabled={s.busy || s.running || s.dirty || !s.project?.model}
-                  onClick={() => void s.check()}
-                  title="前往模型体检室进行切片与打印"
+                  onClick={() => s.setRoom('print')}
+                  title="前往打印制造站进行切片与实机打印"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
                 >
-                  去体检室 <ArrowRight size={13} />
+                  <Printer size={13} />
+                  <span>去打印</span>
+                  <ArrowRight size={13} />
                 </button>
               </div>
             )}
@@ -329,10 +478,11 @@ export function Workbench() {
         {/* 右栏抽屉：点击顶部管线阶段节点时展开检视与微调，平时隐藏 */}
         {inspectStage !== null && (
           <AdjustPanel
+            key={s.project?.id}
             selectedPartId={selectedPartId}
             selectedPointMm={selectedPointMm}
             activeStage={inspectStage}
-            onClose={() => setInspectStage(null)}
+            onClose={() => { setInspectStage(null); setActivePane('model'); }}
           />
         )}
       </div>

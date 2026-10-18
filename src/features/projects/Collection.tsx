@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { ArrowUpRight, Plus } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { useStudio } from '../../state/StudioContext';
-import { CottageRoomHeading } from '../../components/CottageRoomHeading';
-import { Usagi } from '../../components/Usagi';
+import { CollectionHero } from './CollectionHero';
+import { CollectionFilterBar, type CollectionFilterTab } from './CollectionFilterBar';
 import { ProjectCard } from './ProjectCard';
+import { CollectionEmptyState } from './CollectionEmptyState';
 import { ProjectStory } from './ProjectStory';
 import { History } from './History';
 import '../../styles/collection.css';
@@ -11,86 +11,121 @@ import '../../styles/collection.css';
 export function Collection({ mode }: { mode: 'library' | 'gallery' }) {
   const s = useStudio();
   const isGallery = mode === 'gallery';
-  const projects = isGallery ? s.projects.filter((project) => project.exhibited) : s.projects;
+
+  // 搜索与过滤状态
+  const [filterTab, setFilterTab] = useState<CollectionFilterTab>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // 模态弹窗状态
   const [modal, setModal] = useState<{ kind: 'versions' | 'story'; id: string } | null>(null);
   const modalProject = modal && s.projects.find((project) => project.id === modal.id);
-  const open = (kind: 'versions' | 'story', id: string) => {
+
+  const openModal = (kind: 'versions' | 'story', id: string) => {
     setModal({ kind, id });
   };
+
+  // 全量统计
+  const totalCount = s.projects.length;
+  const exhibitedCount = s.projects.filter((p) => p.exhibited).length;
+  const printedCount = s.projects.filter((p) => p.printed).length;
+  const storyCount = s.projects.filter((p) => Boolean(p.story?.trim())).length;
+
+  // 基础列表（展厅仅包含已展出，作品柜包含全部）
+  const baseProjects = useMemo(() => {
+    return isGallery ? s.projects.filter((project) => project.exhibited) : s.projects;
+  }, [isGallery, s.projects]);
+
+  // 根据分类标签与搜索词进行筛选
+  const filteredProjects = useMemo(() => {
+    return baseProjects.filter((project) => {
+      // 1. 分类 Tab 过滤
+      if (filterTab === 'exhibited' && !project.exhibited) return false;
+      if (filterTab === 'unexhibited' && project.exhibited) return false;
+      if (filterTab === 'with_story' && !project.story?.trim()) return false;
+      if (filterTab === 'printed' && !project.printed) return false;
+
+      // 2. 关键词搜索
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = project.name.toLowerCase().includes(query);
+        const matchesStory = Boolean(project.story?.toLowerCase().includes(query));
+        return matchesName || matchesStory;
+      }
+
+      return true;
+    });
+  }, [baseProjects, filterTab, searchQuery]);
+
   return (
-    <div className={`${mode}-page collection-page`}>
-      <CottageRoomHeading
-        room={mode}
-        description={
-          isGallery
-            ? '这里展示从作品柜中选出的作品。每个作品都有故事，把我们的造物时光留在小屋里。'
-            : '每个想法都有属于自己的位置。随时回顾每一次造物尝试，切换历史版本。'
-        }
-        actions={
-          <div className="collection-toolbar-actions">
-            {!isGallery && (
-              <button className="secondary" onClick={() => s.setRoom('gallery')}>
-                打开展厅 <ArrowUpRight size={15} />
-              </button>
-            )}
-            <button
-              className="primary"
-              disabled={s.busy || s.running}
-              onClick={() => (isGallery ? s.setRoom('library') : void s.create())}
-            >
-              {isGallery ? (
-                '从作品柜选作品'
-              ) : (
-                <>
-                  <Plus size={16} /> 新作品
-                </>
-              )}
-            </button>
-          </div>
-        }
+    <div className={`collection-page ${mode}-page`}>
+      {/* 1. 顶层统一乌萨奇工坊展台 */}
+      <CollectionHero
+        mode={mode}
+        totalCount={totalCount}
+        exhibitedCount={exhibitedCount}
+        printedCount={printedCount}
+        storyCount={storyCount}
+        onSwitchMode={(target) => s.setRoom(target)}
+        onCreateNew={() => s.openNewProject()}
+        disabled={s.busy || s.running}
       />
-      {!projects.length ? (
-        <section className="collection-empty">
-          <Usagi size={115} />
-          <div>
-            <h2>{isGallery ? '展厅，等你放入第一件作品' : '给小屋添一件自己的作品'}</h2>
-            <p>
-              {isGallery
-                ? '在作品柜里选择喜欢的形状，点击“放入展厅”。'
-                : '说出你的想法，乌萨奇陪你把它变成真实的形状。'}
-            </p>
-          </div>
-        </section>
-      ) : (
-        <>
-          <div className="collection-shelf-heading">
-            <h2>
-              {isGallery ? '我的小屋收藏' : '我的作品'} <span>{projects.length}</span>
-            </h2>
-            <p>{isGallery ? '这些作品都由你从作品柜选入。' : '点击作品看故事，点击版本切换形状。'}</p>
-          </div>
-          <div className="collection-grid">
-            {projects.map((project) => (
+
+      {/* 2. 统一筛选、搜索与操作工具栏 */}
+      <CollectionFilterBar
+        mode={mode}
+        filter={filterTab}
+        onFilterChange={setFilterTab}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        displayedCount={filteredProjects.length}
+        onAction={() => (isGallery ? s.setRoom('library') : s.openNewProject())}
+        actionDisabled={s.busy || s.running}
+      />
+
+      {/* 3. 展品/作品卡片网格与空状态 */}
+      <main className="collection-shelf-content">
+        {filteredProjects.length > 0 ? (
+          <div className="collection-grid modern-collection-grid">
+            {filteredProjects.map((project) => (
               <ProjectCard
                 key={project.id}
                 project={project}
-                onVersions={() => open('versions', project.id)}
-                onStory={() => open('story', project.id)}
+                featured={isGallery}
+                onVersions={() => openModal('versions', project.id)}
+                onStory={() => openModal('story', project.id)}
               />
             ))}
           </div>
-        </>
-      )}
+        ) : (
+          <CollectionEmptyState
+            mode={mode}
+            isFiltered={Boolean(searchQuery || filterTab !== 'all')}
+            onResetFilter={() => {
+              setSearchQuery('');
+              setFilterTab('all');
+            }}
+            onAction={() => (isGallery ? s.setRoom('library') : s.openNewProject())}
+          />
+        )}
+      </main>
+
+      {/* 4. 版本时光机弹窗 */}
       {modal?.kind === 'versions' && modalProject && (
         <History
           key={modalProject.id}
           project={modalProject}
           onClose={() => setModal(null)}
-          onSelected={() => s.adopt(modalProject)}
+          onSelected={() => void s.refresh()}
         />
       )}
+
+      {/* 5. 亲子共创故事弹窗 */}
       {modal?.kind === 'story' && modalProject && (
-        <ProjectStory key={modalProject.id} project={modalProject} onClose={() => setModal(null)} />
+        <ProjectStory
+          key={modalProject.id}
+          project={modalProject}
+          onClose={() => setModal(null)}
+        />
       )}
     </div>
   );

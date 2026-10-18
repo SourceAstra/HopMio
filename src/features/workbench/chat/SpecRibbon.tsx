@@ -1,15 +1,19 @@
-import { useRef, type RefObject } from 'react';
+import { useState, useRef, type RefObject } from 'react';
 import {
   ChevronDown,
   ChevronUp,
   ImagePlus,
   Plus,
   Sliders,
+  FolderOpen,
 } from 'lucide-react';
 import { useStudio } from '../../../state/StudioContext';
 import { Usagi } from '../../../components/Usagi';
 import { SelectedMaterials } from '../../materials/SelectedMaterials';
+import { MaterialPickerModal } from '../../materials/MaterialPickerModal';
 import type { Spec } from '../../../types';
+import { canSetHeight, patchDimensions } from '../../modeling/dimensions';
+import { selectMaterials } from '../../materials/selection';
 
 interface SpecRibbonProps {
   isOpen: boolean;
@@ -27,11 +31,17 @@ export function SpecRibbon({
   inspectAssetId,
 }: SpecRibbonProps) {
   const s = useStudio();
-  const patch = (data: Partial<Spec>) => s.setSpec((old) => ({ ...old, ...data }));
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const patch = (data: Partial<Spec>) => s.setSpec((old) => patchDimensions(old, data));
   const hasPhotos = s.spec.asset_ids.length > 0;
 
+  const handleConfirmPicker = (selectedIds: string[]) => {
+    s.setSpec((old) => selectMaterials(old, selectedIds));
+    s.setNotice(`已更新当前作品的参考照片（共 ${selectedIds.length} 张）`);
+  };
+
   const templateMap: Record<string, string> = {
-    usagi: '🐰 乌萨奇',
+    usagi: '乌萨奇',
     cup: '✏️ 小笔筒',
     plaque: '🏷️ 小屋名牌',
   };
@@ -46,7 +56,7 @@ export function SpecRibbon({
           <span className="summary-chip">📏 {s.spec.height_mm || 80} mm</span>
           <span className="summary-chip">{s.spec.base ? '🧱 稳固底座' : '⚪ 无底座'}</span>
           {s.spec.mode === 'text' && s.spec.provider === 'local' && (
-            <span className="summary-chip">{templateMap[s.spec.template] || '🐰 乌萨奇'}</span>
+            <span className="summary-chip">{templateMap[s.spec.template] || '乌萨奇'}</span>
           )}
           {hasPhotos && <span className="summary-chip">📸 {s.spec.asset_ids.length} 张照片</span>}
         </div>
@@ -69,17 +79,18 @@ export function SpecRibbon({
                   className="compact-action-btn"
                   disabled={s.busy || s.running}
                   onClick={() => fileInputRef.current?.click()}
-                  title="上传实物参考照片"
+                  title="上传本地参考照片"
                 >
-                  <Plus size={12} /> 上传照片
+                  <Plus size={12} /> 本地上传
                 </button>
                 <button
                   type="button"
-                  className="compact-action-btn"
-                  onClick={() => s.setRoom('materials')}
-                  title="前往素材架挑选"
+                  className="compact-action-btn highlight"
+                  disabled={s.busy || s.running}
+                  onClick={() => setIsPickerOpen(true)}
+                  title="从素材灵感架挑选已有照片加入当前作品"
                 >
-                  <ImagePlus size={12} /> 素材架
+                  <FolderOpen size={12} /> 从素材架挑选
                 </button>
               </div>
             </div>
@@ -91,16 +102,27 @@ export function SpecRibbon({
                 activeInspectId={inspectAssetId}
               />
             ) : (
-              <div
-                className="inspiration-empty-card"
-                role="button"
-                tabIndex={0}
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <div className="inspiration-empty-card">
                 <Usagi size={32} />
                 <div className="empty-card-text">
-                  <strong>上传实物多角度照片</strong>
-                  <small>支持单张或多角度照片进行 3D 逆向定标</small>
+                  <strong>添加实物参考照片</strong>
+                  <small>支持单张或多角度照片进行 3D 逆向定标与细节雕刻</small>
+                </div>
+                <div className="empty-card-actions-row">
+                  <button
+                    type="button"
+                    className="compact-action-btn primary-action"
+                    onClick={() => setIsPickerOpen(true)}
+                  >
+                    <FolderOpen size={12} /> 从素材架选用
+                  </button>
+                  <button
+                    type="button"
+                    className="compact-action-btn secondary-action"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Plus size={12} /> 本地上传
+                  </button>
                 </div>
               </div>
             )}
@@ -117,8 +139,9 @@ export function SpecRibbon({
                   min={10}
                   max={300}
                   value={s.spec.height_mm || 80}
-                  disabled={s.busy || s.running}
-                  onChange={(e) => patch({ height_mm: Number(e.target.value) || 80 })}
+                  disabled={s.busy || s.running || !canSetHeight(s.spec) || !!s.spec.reconstruction_plan?.scale_reference}
+                  title={canSetHeight(s.spec) ? '按有效方案设置高度' : '此方案请在右侧参数面板调整实际尺寸'}
+                  onChange={(e) => { if (e.target.value && e.target.validity.valid) patch({ height_mm: Number(e.target.value) }); }}
                 />
                 <small>mm</small>
               </div>
@@ -128,7 +151,7 @@ export function SpecRibbon({
                     key={h}
                     type="button"
                     className={`quick-preset-pill ${s.spec.height_mm === h ? 'active' : ''}`}
-                    disabled={s.busy || s.running}
+                    disabled={s.busy || s.running || !canSetHeight(s.spec) || !!s.spec.reconstruction_plan?.scale_reference}
                     onClick={() => patch({ height_mm: h })}
                   >
                     {h}
@@ -144,7 +167,7 @@ export function SpecRibbon({
                 disabled={s.busy || s.running}
                 onChange={(e) => patch({ base: e.target.checked })}
               />
-              <span>加稳固底座</span>
+              <span>附加制造底座</span>
             </label>
           </div>
 
@@ -156,7 +179,7 @@ export function SpecRibbon({
                 className={`choice-pill ${s.spec.template === 'usagi' ? 'active' : ''}`}
                 onClick={() => patch({ template: 'usagi' })}
               >
-                🐰 乌萨奇摆件
+                乌萨奇摆件
               </button>
               <button
                 type="button"
@@ -195,6 +218,15 @@ export function SpecRibbon({
           )}
         </div>
       )}
+
+      {/* 从素材灵感架挑选照片加入当前作品弹窗 */}
+      <MaterialPickerModal
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onConfirm={handleConfirmPicker}
+        currentAssetIds={s.spec.asset_ids}
+        limit={['relief', 'silhouette'].includes(s.spec.mode) ? 1 : 96}
+      />
     </div>
   );
 }

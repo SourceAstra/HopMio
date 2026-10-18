@@ -8,28 +8,48 @@ import {
   Copy,
   Check,
   Compass,
+  Plus,
+  Pencil,
+  Trash2,
+  RotateCcw,
+  Filter,
 } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
 import { PageHeading } from '../components/PageHeading';
 import { Usagi } from '../components/Usagi';
 import {
-  INSPIRATION_ITEMS,
   INSPIRATION_CATEGORIES,
   type InspirationItem,
   type InspirationCategoryId,
 } from '../theme/inspirations';
+import { useInspirations } from '../features/inspirations/inspirationsStore';
+import { InspirationEditorModal } from '../features/inspirations/InspirationEditorModal';
+import { InspirationDeleteConfirmModal } from '../features/inspirations/InspirationDeleteConfirmModal';
 
 export function Inspirations() {
   const s = useStudio();
+  const { items, addItem, updateItem, deleteItem, resetDefaults } = useInspirations();
+
   const [activeCategory, setActiveCategory] = useState<InspirationCategoryId>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // 弹窗状态
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InspirationItem | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<InspirationItem | null>(null);
+
   // 过滤后的灵感列表
   const filteredItems = useMemo(() => {
-    return INSPIRATION_ITEMS.filter((item) => {
-      const matchCategory =
-        activeCategory === 'all' || item.category === activeCategory;
+    return items.filter((item) => {
+      let matchCategory = true;
+      if (activeCategory === 'custom') {
+        matchCategory = Boolean(item.isCustom) || item.category === 'custom';
+      } else if (activeCategory !== 'all') {
+        matchCategory = item.category === activeCategory;
+      }
+
       const query = searchQuery.trim().toLowerCase();
       const matchQuery =
         !query ||
@@ -37,20 +57,43 @@ export function Inspirations() {
         item.desc.toLowerCase().includes(query) ||
         item.prompt.toLowerCase().includes(query) ||
         (item.tag && item.tag.toLowerCase().includes(query));
+
       return matchCategory && matchQuery;
     });
-  }, [activeCategory, searchQuery]);
+  }, [items, activeCategory, searchQuery]);
 
-  // 一键以此灵感开启造物
+  // 各分类下的数量统计
+  const countsByCategory = useMemo(() => {
+    const counts: Record<string, number> = { all: items.length };
+    let customCount = 0;
+
+    items.forEach((it) => {
+      counts[it.category] = (counts[it.category] || 0) + 1;
+      if (it.isCustom || it.category === 'custom') {
+        customCount++;
+      }
+    });
+
+    counts.custom = customCount;
+    return counts;
+  }, [items]);
+
+  // 一键以此灵感开启造物：回到首页并装填灵感提示词
   const startWithInspiration = (item: InspirationItem) => {
-    void s.create(
-      {
-        mode: 'text',
-        prompt: item.prompt,
-        template: 'usagi',
-        provider: 'parametric',
-      },
-      item.title,
+    s.setSpec({
+      ...s.spec,
+      mode: 'text',
+      prompt: item.prompt,
+    });
+    s.setRoom('desk');
+    s.setNotice(`✦ 已装填灵感：「${item.title}」，点击发送开启造物！`);
+    window.dispatchEvent(
+      new CustomEvent('yaha-apply-inspiration', {
+        detail: {
+          prompt: item.prompt,
+          name: item.title,
+        },
+      }),
     );
   };
 
@@ -67,36 +110,100 @@ export function Inspirations() {
     }
   };
 
-  // 各分类下的数量统计
-  const countsByCategory = useMemo(() => {
-    const counts: Record<string, number> = { all: INSPIRATION_ITEMS.length };
-    INSPIRATION_ITEMS.forEach((it) => {
-      counts[it.category] = (counts[it.category] || 0) + 1;
-    });
-    return counts;
-  }, []);
+  // 打开新增弹窗
+  const handleOpenAdd = () => {
+    setEditingItem(null);
+    setEditorOpen(true);
+  };
+
+  // 打开编辑弹窗
+  const handleOpenEdit = (item: InspirationItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingItem(item);
+    setEditorOpen(true);
+  };
+
+  // 打开删除确认
+  const handleOpenDelete = (item: InspirationItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingItem(item);
+    setDeleteConfirmOpen(true);
+  };
+
+  // 保存新增或修改
+  const handleSaveInspiration = (data: {
+    title: string;
+    emoji: string;
+    prompt: string;
+    desc: string;
+    category: InspirationItem['category'];
+    categoryLabel: string;
+    tag?: string;
+    isCustom?: boolean;
+  }) => {
+    if (editingItem) {
+      updateItem(editingItem.id, data);
+      s.setNotice(`✦ 已更新灵感：「${data.title}」`);
+    } else {
+      addItem(data);
+      s.setNotice(`✦ 乌萨奇已将「${data.title}」妥善收进宝箱！`);
+      // 自动切换到全部或脑洞标签以展示最新成果
+      if (activeCategory !== 'all' && activeCategory !== 'custom') {
+        setActiveCategory('custom');
+      }
+    }
+  };
+
+  // 确认删除
+  const handleConfirmDelete = () => {
+    if (deletingItem) {
+      deleteItem(deletingItem.id);
+      s.setNotice(`已放飞灵感：「${deletingItem.title}」`);
+      setDeletingItem(null);
+    }
+  };
+
+  // 恢复默认灵感
+  const handleResetDefaults = () => {
+    if (window.confirm('确定要恢复乌萨奇官方预置灵感库吗？这将重置所有灵感为初始宝箱。')) {
+      resetDefaults();
+      s.setNotice('已恢复乌萨奇官方预设灵感库！');
+    }
+  };
 
   return (
     <div className="inspirations-page">
       <PageHeading
         title="乌萨奇的灵感宝箱"
-        description="这里收纳了乌萨奇从小屋各处搜罗的海量奇思妙想！挑一个喜欢的点子，一键搬上造物桌开始创作。"
+        description="这里收纳了乌萨奇与小朋友的全部奇思妙想！你可以记下新点子，挑选喜欢的点子一键搬上造物桌。"
         actions={
           <div className="inspiration-heading-actions">
             <button
+              type="button"
+              className="primary inspiration-add-btn"
+              onClick={handleOpenAdd}
+              title="写下小朋友自己的奇思妙想"
+            >
+              <Plus size={16} />
+              <span>＋ 记下我的灵感</span>
+            </button>
+            <button
+              type="button"
               className="secondary nav-back-btn"
               onClick={() => s.setRoom('hall')}
               title="推门回到小屋门厅"
             >
               <ArrowLeft size={16} />
-              <span>返回小屋门厅</span>
+              <span>返回小屋大厅</span>
             </button>
             <button
-              className="primary"
-              onClick={() => void s.create()}
-              title="不使用预设，直接开启空白作品"
+              type="button"
+              className="secondary reset-btn"
+              onClick={handleResetDefaults}
+              title="重置为官方预置宝箱"
             >
-              ＋ 自主开启造物
+              <RotateCcw size={14} />
+              <span>恢复预设</span>
             </button>
           </div>
         }
@@ -115,23 +222,23 @@ export function Inspirations() {
           </div>
           <h2>不知道从哪开始？翻翻乌萨奇的藏宝箱！</h2>
           <p>
-            点击任意喜欢的灵感卡片，乌萨奇会自动帮你把想法和提示词填好，带你进入造物桌面直接开工！
+            点击任意喜欢的灵感卡片，乌萨奇会自动帮你把想法和提示词填好，带你进入造物桌面直接开工！小朋友也可以随时点击右上角「＋ 记下我的灵感」，存下专属小脑洞。
           </p>
           <div className="inspiration-hero-stats">
             <div className="hero-stat-pill">
               <Lightbulb size={14} className="stat-icon-yellow" />
               <span>
-                <strong>{INSPIRATION_ITEMS.length}</strong> 个奇思妙想
+                <strong>{items.length}</strong> 个奇思妙想
               </span>
             </div>
             <div className="hero-stat-pill">
-              <Compass size={14} className="stat-icon-gold" />
+              <Sparkles size={14} className="stat-icon-gold" />
               <span>
-                <strong>5</strong> 大精选分类
+                <strong>{countsByCategory.custom || 0}</strong> 个小朋友脑洞
               </span>
             </div>
             <div className="hero-stat-pill">
-              <Sparkles size={14} className="stat-icon-orange" />
+              <Compass size={14} className="stat-icon-orange" />
               <span>零门槛 · 极易3D打印</span>
             </div>
           </div>
@@ -159,24 +266,44 @@ export function Inspirations() {
           })}
         </div>
 
-        <div className="inspiration-search-box">
-          <Search size={16} className="search-icon" />
-          <input
-            type="text"
-            placeholder="搜索灵感点子、关键词（如：印章、猫、钥匙扣、恐龙）…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="搜索灵感"
-          />
-          {searchQuery && (
-            <button
-              className="clear-search-btn"
-              onClick={() => setSearchQuery('')}
-              title="清空搜索"
+        {/* 右侧筛选组合：分类下拉框 + 关键词搜索 */}
+        <div className="inspiration-toolbar-right">
+          <div className="inspiration-select-wrapper" title="选择分类快速筛选">
+            <Filter size={14} className="select-icon" />
+            <select
+              className="inspiration-category-select"
+              value={activeCategory}
+              onChange={(e) => setActiveCategory(e.target.value as InspirationCategoryId)}
+              aria-label="按分类快速下拉选择"
             >
-              ×
-            </button>
-          )}
+              {INSPIRATION_CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label} ({countsByCategory[cat.id] || 0})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="inspiration-search-box">
+            <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              placeholder="搜索灵感点子（如：激光剑、飞龙、笔筒、开书器）…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="搜索灵感"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="clear-search-btn"
+                onClick={() => setSearchQuery('')}
+                title="清空搜索"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
@@ -187,7 +314,7 @@ export function Inspirations() {
             {filteredItems.map((item) => (
               <article
                 key={item.id}
-                className={`inspiration-chest-card ${item.featured ? 'featured' : ''}`}
+                className={`inspiration-chest-card ${item.featured ? 'featured' : ''} ${item.isCustom ? 'custom-chest-card' : ''}`}
                 onClick={() => startWithInspiration(item)}
                 role="button"
                 tabIndex={0}
@@ -196,11 +323,40 @@ export function Inspirations() {
                 <div className="chest-card-header">
                   <span className="chest-card-emoji">{item.emoji}</span>
                   <div className="chest-card-titles">
-                    <h3 className="chest-card-title">{item.title}</h3>
+                    <div className="chest-title-row">
+                      <h3 className="chest-card-title">{item.title}</h3>
+                      {item.isCustom && (
+                        <span className="chest-badge-custom">
+                          <Sparkles size={11} /> 小朋友创作
+                        </span>
+                      )}
+                    </div>
                     <div className="chest-card-badges">
                       <span className="chest-badge-category">{item.categoryLabel}</span>
                       {item.tag && <span className="chest-badge-tag">{item.tag}</span>}
                     </div>
+                  </div>
+
+                  {/* 卡片右上角独立快捷操作工具条 */}
+                  <div className="chest-card-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="chest-action-btn edit-btn"
+                      onClick={(e) => handleOpenEdit(item, e)}
+                      title="编辑灵感"
+                      aria-label="编辑灵感"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="chest-action-btn delete-btn"
+                      onClick={(e) => handleOpenDelete(item, e)}
+                      title="放飞删除灵感"
+                      aria-label="删除灵感"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
 
@@ -241,22 +397,49 @@ export function Inspirations() {
           </div>
         ) : (
           <div className="inspiration-empty-state">
-            <span className="empty-emoji">🔍</span>
-            <h3>没有找到匹配的灵感</h3>
-            <p>换个搜索词试试，或者直接喊出你的专属想法！</p>
+            <span className="empty-emoji">
+              {activeCategory === 'custom' ? '✨' : '🔍'}
+            </span>
+            <h3>
+              {activeCategory === 'custom'
+                ? '小朋友还没有记下自己的小脑洞'
+                : '没有找到匹配的灵感'}
+            </h3>
+            <p>
+              {activeCategory === 'custom'
+                ? '快点击上方「＋ 记下我的灵感」，写下第一个奇思妙想吧！'
+                : '换个搜索词试试，或者直接喊出你的专属想法！'}
+            </p>
             <div className="empty-actions">
-              <button
-                className="secondary"
-                onClick={() => {
-                  setSearchQuery('');
-                  setActiveCategory('all');
-                }}
-              >
-                清除筛选条件
-              </button>
-              <button className="primary" onClick={() => void s.create()}>
-                直接去造物桌面开工
-              </button>
+              {activeCategory === 'custom' ? (
+                <button
+                  type="button"
+                  className="primary inspiration-add-btn"
+                  onClick={handleOpenAdd}
+                >
+                  <Plus size={16} /> 立即记下第一个灵感
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setActiveCategory('all');
+                    }}
+                  >
+                    清除筛选条件
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => s.setRoom('desk')}
+                  >
+                    直接去造物桌面开工
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -269,6 +452,7 @@ export function Inspirations() {
           <p>“别动脑，喊出你的想法 —— 剩下的交给乌萨奇。”</p>
         </div>
         <button
+          type="button"
           className="primary footer-start-btn"
           onClick={() => {
             s.setRoom('desk');
@@ -278,6 +462,28 @@ export function Inspirations() {
           <ArrowRight size={16} />
         </button>
       </section>
+
+      {/* 录入与编辑弹窗 */}
+      <InspirationEditorModal
+        isOpen={editorOpen}
+        initialData={editingItem}
+        onSave={handleSaveInspiration}
+        onClose={() => {
+          setEditorOpen(false);
+          setEditingItem(null);
+        }}
+      />
+
+      {/* 删除确认弹窗 */}
+      <InspirationDeleteConfirmModal
+        isOpen={deleteConfirmOpen}
+        item={deletingItem}
+        onConfirm={handleConfirmDelete}
+        onClose={() => {
+          setDeleteConfirmOpen(false);
+          setDeletingItem(null);
+        }}
+      />
     </div>
   );
 }

@@ -11,6 +11,8 @@ const methods = new Set([
   'settings.models.discover', 'settings.models.test',
   'bootstrap', 'project.create', 'project.get', 'project.list', 'project.history',
   'project.restore', 'project.update', 'project.export', 'asset.upload', 'asset.list',
+  'project.select_revision', 'project.delete', 'project.delete_revision', 'revision.delete',
+  'asset.delete', 'materials.get', 'materials.save',
   'idea.interpret', 'idea.adjustment', 'idea.converse', 'model.generate', 'model.adjust', 'model.plan',
   'model.check', 'model.slice', 'job.get', 'job.cancel', 'job.list', 'profile.save',
   'settings.get', 'settings.unlock', 'settings.update', 'workshop.templates',

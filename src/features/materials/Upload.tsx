@@ -14,7 +14,7 @@ interface UploadProgress {
   failures: { name: string; message: string }[];
 }
 
-export function Upload({ compact = false }: { compact?: boolean }) {
+export function Upload({ compact = false, selectAfterUpload = compact }: { compact?: boolean; selectAfterUpload?: boolean }) {
   const s = useStudio();
   const input = useRef<HTMLInputElement>(null);
   const append = useRef(false);
@@ -32,7 +32,7 @@ export function Upload({ compact = false }: { compact?: boolean }) {
     input.current?.click();
   };
   const upload = async (files: File[], add = false) => {
-    if (!files.length || uploading.current || s.busy || s.running) return;
+    if (!files.length || uploading.current || s.busy || (selectAfterUpload && s.running)) return;
     setProgress(null);
     const photos = files.every((file) => /\.(png|jpe?g|webp)$/i.test(file.name));
     const mode: Mode = photos
@@ -43,7 +43,7 @@ export function Upload({ compact = false }: { compact?: boolean }) {
     const limit = ['image', 'multiview'].includes(mode)
       ? s.preferences?.reconstruction?.max_photos || 96
       : 1;
-    const ids = add ? [...s.spec.asset_ids] : [];
+    const ids = add && selectAfterUpload ? [...s.spec.asset_ids] : [];
     if (files.length + ids.length > limit || (!photos && files.length !== 1)) {
       s.setNotice(
         `本次最多选择 ${limit} ${photos ? '张照片' : '个模型或作品包'}，没有截断或上传文件。`,
@@ -64,13 +64,13 @@ export function Upload({ compact = false }: { compact?: boolean }) {
           try {
             const base64 = await fileBase64(file);
             if (file.name.toLowerCase().endsWith('.usagi')) {
-              const project = await call<Project>('project.import', { base64 });
-              s.setAssets(await call<Asset[]>('asset.list'));
-              if (mounted.current) {
+              await s.executeWithJobCheck(async () => {
+                const project = await call<Project>('project.import', { base64 });
+                s.setAssets(await call<Asset[]>('asset.list'));
                 s.adopt(project);
                 s.setRoom('desk');
                 s.setNotice('作品包已恢复为一个新副本。');
-              }
+              }, '恢复作品包');
               return;
             }
             const uploaded = await call<Asset>('asset.upload', { name: file.name, base64 });
@@ -79,7 +79,7 @@ export function Upload({ compact = false }: { compact?: boolean }) {
             known.set(key, asset);
             s.setAssets((old) => [asset, ...old.filter((a) => a.id !== asset.id)]);
             if (!ids.includes(asset.id)) ids.push(asset.id);
-            if (mounted.current) s.setSpec((old) => selectMaterials(old, [...ids], mode));
+            if (mounted.current && selectAfterUpload) s.setSpec((old) => selectMaterials(old, [...ids], mode));
           } catch (error) {
             failures.push({
               name: file.name,
@@ -92,7 +92,7 @@ export function Upload({ compact = false }: { compact?: boolean }) {
         }
         s.setNotice(
           mounted.current
-            ? `已上传 ${completed - failures.length}/${files.length} 份材料${failures.length ? `，${failures.length} 份失败，请查看文件旁的原因。` : '，已加入本次选择。'}`
+            ? `已上传 ${completed - failures.length}/${files.length} 份材料${failures.length ? `，${failures.length} 份失败，请查看文件旁的原因。` : selectAfterUpload ? '，已加入本次选择。' : '到素材架，当前作品未改变。'}`
             : `已保存 ${completed - failures.length} 份到素材架；离开上传页后已停止后续上传。`,
         );
       });
@@ -118,17 +118,17 @@ export function Upload({ compact = false }: { compact?: boolean }) {
         </>
       )}
       <div className="material-upload-actions">
-        <button className="secondary" disabled={s.busy || s.running} onClick={() => choose()}>
+        <button className="secondary" disabled={s.busy || (selectAfterUpload && s.running)} onClick={() => choose()}>
           <ImagePlus size={16} />{' '}
           {compact ? (s.spec.asset_ids.length ? '换一组照片' : '上传照片') : '选择文件'}
         </button>
-        {!!s.spec.asset_ids.length && isPhotoMode(s.spec.mode) && (
+        {selectAfterUpload && !!s.spec.asset_ids.length && isPhotoMode(s.spec.mode) && (
           <button className="secondary" disabled={s.busy || s.running} onClick={() => choose(true)}>
             补充照片
           </button>
         )}
       </div>
-      <small>选择新的一组会替换本次材料；补充照片会保留已选照片。</small>
+      <small>{selectAfterUpload ? '选择新的一组会替换本次材料；补充照片会保留已选照片。' : '上传仅保存到素材架；选好后可加入当前作品或开启新作品。'}</small>
       {progress && (
         <div className="material-upload-progress" role="status" aria-live="polite">
           <strong>

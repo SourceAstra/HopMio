@@ -83,9 +83,9 @@ export function Checkup() {
             className="primary"
             disabled={!s.canPrepare}
             title={s.printReadiness.prepareBlock || undefined}
-            onClick={() => s.setRoom('prepare')}
+            onClick={() => s.setRoom('print')}
           >
-            去打印准备台 →
+            去打印制造站 →
           </button>
           <StudioLaunchButton includeModel />
         </section>

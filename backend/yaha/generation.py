@@ -1,23 +1,37 @@
 """生成统一走受控 Blender；复测通过后提交新版本。"""
 
 import json
+import uuid
 from .contracts import DesignSpec, DomainError, Mode
 from .modeling.building import build_with_correction
-from .modeling.adjusting import adjust_plan
+from .modeling.adjusting import adjust_plan, validate_scope
 from .modeling.planner import current_plan, design_plan
 from .modeling.reviewing import refine_shape
 from .modeling.photo_strategy import select_photo_route, build_photo_result
 from .modeling.photo_quality import photo_completion
-from .modeling.design_review import review_design, require_adjustment_acceptance
+from .modeling.design_review import review_design, adjustment_accepted
 from .modeling.geometry_review import review_geometry
+from .modeling.mesh_editing import editable_spec, require_source
 
 
 def start_generation(service, identifier, data, repair=False, *, adjustment=None, auto_photo=False):
     spec = DesignSpec.model_validate(data)
-    if spec.mode == Mode.TEXT and spec.asset_ids and (auto_photo or spec.provider == "parametric"):
+    project = service.projects.get(identifier)
+    if spec.modeling_plan and not spec.modeling_plan.source_mesh and not spec.modeling_plan.source_options:
+        from .modeling.contracts import PlanOptions
+        old = project["spec"]
+        spec.modeling_plan.source_options = PlanOptions(base=bool(old.get("base")), hole=bool(old.get("hole")), hole_shape=old.get("hole_shape", "round"))
+    if adjustment:
+        spec = editable_spec(spec, project, service.assets)
+        previous_plan = DesignSpec.model_validate(project["spec"]).modeling_plan
+        if previous_plan:
+            require_source(previous_plan, spec.modeling_plan)
+    if spec.mode in (Mode.RELIEF, Mode.SILHOUETTE) and not (spec.modeling_plan and spec.modeling_plan.source_mesh):
+        spec.provider = "local"
+        spec.modeling_plan = None
+    elif spec.mode == Mode.TEXT and spec.asset_ids and (auto_photo or spec.provider == "parametric"):
         spec.mode = Mode.MULTIVIEW if len(spec.asset_ids) > 1 else Mode.IMAGE
     route = select_photo_route(service, spec, auto_photo and not repair and not adjustment)
-    project = service.projects.get(identifier)
     parent = project["revision_id"]
     previous_adjustment = (project["model"] or {}).get("adjustment") if not repair and spec.provider == "parametric" and current_plan(spec) else None
     if adjustment and (repair or spec.provider != "parametric" or not spec.modeling_plan or not project["model"]):
@@ -34,14 +48,14 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
 
     def build(source, job, adjustment_result):
         photo_shape = source.provider == "parametric" and source.mode in (Mode.IMAGE, Mode.MULTIVIEW)
-        if source.provider == "parametric" and source.mode in (Mode.TEXT, Mode.IMAGE, Mode.MULTIVIEW):
-            if photo_shape and not source.asset_ids:
+        if source.provider == "parametric" and (source.modeling_plan and source.modeling_plan.source_mesh or source.mode in (Mode.TEXT, Mode.IMAGE, Mode.MULTIVIEW)):
+            if photo_shape and not source.asset_ids and not (source.modeling_plan and source.modeling_plan.source_mesh):
                 raise DomainError("先上传一张参考照片。", "PHOTO_REQUIRED")
             if not current_plan(source) or (not adjustment_result and source.modeling_plan.schema_version < 5):
                 design_plan(service, source, job)
         # 优化 B（微调路径纯粹化）：明确区分“照片一键建模全景审阅”与“用户意图局部微调”。
         # 用户微调已有明确主观修改意图，直通物理制造定标，避免拉入全量原图进行严苛比对与长达数分钟的重构循环。
-        review = photo_shape and not repair and not adjustment_result
+        review = photo_shape and not repair and not adjustment_result and not (source.modeling_plan and source.modeling_plan.source_mesh)
         result_spec = source
         result = build_with_correction(service, source, job, repair=repair, progress_range=(10, 55) if review else None, review_views=bool(review or adjustment_result or source.provider == "parametric"), fit_photos=not adjustment_result, adjustment_intent=(adjustment_result or {}).get("instruction"))
         if review:
@@ -51,20 +65,24 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
                 result_spec, result = review_design(service, source, result, project, job, adjustment=adjustment_result)
             else:
                 result_spec, result = review_geometry(service, source, result, project, job, adjustment=adjustment_result, require_change=bool(adjustment))
-            if adjustment_result:
-                require_adjustment_acceptance(result[0].manifest["design_review"])
         return result_spec, result
 
     def work(job):
         job.progress(1, "准备建模材料")
+        scope_baseline = spec.modeling_plan.model_copy(deep=True) if adjustment and spec.modeling_plan else None
         adjustment_result = adjust_plan(service, spec, adjustment, project, job) if adjustment else previous_adjustment
         result_spec, result = build_photo_result(spec, route, job, lambda source: build(source, job, adjustment_result))
+        if scope_baseline:
+            validate_scope(scope_baseline, result_spec.modeling_plan, adjustment.target_part_id)
         built, mesh, measurements = result
         if adjustment_result:
             built.manifest["adjustment"] = adjustment_result
         review = built.manifest.get("design_review") or built.manifest.get("photo_review")
         completion = photo_completion(review)
         draft = completion["status"] == "draft"
+        if adjustment_result and not adjustment_accepted(review or {}):
+            draft = True
+            completion = {"status": "draft", "message": "微调候选已保存，尚未通过审阅；当前模型保留，可在版本记录中查看或重试。"}
         job.progress(92, "保存待改进草稿与审阅依据" if draft else "保存已复测的模型与源工程")
         with service.lock:
             job.check()
@@ -76,7 +94,8 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
                 for role, content in built.files.items():
                     descriptor = built.manifest["outputs"].get(role, {})
                     extension = descriptor.get("extension", "." + role)
-                    asset = service.assets.write(content, extension, "作品" + extension, "model-preview" if role in ("comparison", "reference") else "model", units=built.manifest.get("units", {}).get(role, "m" if extension in (".glb", ".blend") else "mm"))
+                    kind = "model-preview" if extension in (".png", ".jpg", ".jpeg", ".webp") else "model"
+                    asset = service.assets.write(content, extension, "作品" + extension, kind, units=built.manifest.get("units", {}).get(role, "m" if extension in (".glb", ".blend") else "mm"))
                     saved.append(asset["id"])
                     ids[role + "_id"] = asset["id"]
                 manifest = service.assets.write(json.dumps(built.manifest, ensure_ascii=False).encode(), ".json", "建模清单.json", "manifest")
@@ -86,7 +105,7 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
                     "size_mm": mesh.extents.round(3).tolist(), "faces": len(mesh.faces),
                     "volume_mm3": round(abs(mesh.volume), 3), "preview_units": "m",
                     "measurements": measurements,
-                    "precision_status": "verified" if measurements else "unverified",
+                    "precision_status": "verified" if measurements and all(item["status"] == "pass" for item in measurements) else "unverified",
                     "origin": "Blender 网格修复" if repair else "照片参考造型 · Blender" if spec.provider == "parametric" and spec.asset_ids else {"parametric": "AI 参数 · Blender", "reconstruction": "照片表面重建 · Blender", "local": "本地模板 · Blender"}[spec.provider],
                 }
                 if built.manifest.get("reconstruction"):
@@ -101,7 +120,19 @@ def start_generation(service, identifier, data, repair=False, *, adjustment=None
                     model["photo_fidelity"] = built.manifest["photo_fidelity"]
                 if adjustment_result:
                     model["adjustment"] = adjustment_result
-                return job.commit(lambda: {"project": service.projects.revision(identifier, result_spec.model_dump(), model, "待改进草稿" if draft else "AI 细节调整" if adjustment else "Blender 修复" if repair else "Blender 建模"), "completion": completion})
+                if result_spec.modeling_plan and result_spec.modeling_plan.source_mesh:
+                    model["origin"] = "原网格编辑 · Blender"
+                    original = project.get("model") or {}
+                    for key in ("source_glb_id", "reference_id", "reconstruction", "photo_fidelity"):
+                        if key in original:
+                            model[key] = original[key]
+                    if model.get("photo_fidelity"):
+                        model["photo_fidelity"] = model["photo_fidelity"] | {"edited": True, "appearance_status": "unverified", "warnings": list(model["photo_fidelity"].get("warnings", [])) + ["当前为原网格的编辑版本；源照片与观测报告仅供溯源，不证明编辑后与实物相同。"]}
+                def save_revision():
+                    candidate = str(uuid.uuid4())
+                    updated = service.projects.revision(identifier, result_spec.model_dump(), model, "待改进草稿" if draft else "AI 细节调整" if adjustment else "Blender 修复" if repair else "Blender 建模", activate=not draft or not project.get("model"), revision_identifier=candidate)
+                    return {"project": updated, "candidate_revision_id": candidate, "applied": not draft, "completion": completion}
+                return job.commit(save_revision)
             except Exception:
                 for asset_id in reversed(saved):
                     service.assets.remove(asset_id)
