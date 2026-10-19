@@ -18,6 +18,7 @@ networkx==3.7
 numpy==2.5.4
 opencv-python-headless==4.14.0.94
 packaging==26.3
+paho-mqtt==2.1.0
 pillow==12.3.0
 pluggy==1.6.0
 pydantic==2.14.0

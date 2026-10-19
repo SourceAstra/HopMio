@@ -38,6 +38,7 @@
 | [httpx](https://www.python-httpx.org) | BSD-3-Clause |
 | [pydantic](https://docs.pydantic.dev)（含 pydantic_core / Rust 依赖） | MIT |
 | [keyring](https://github.com/jaraco/keyring) | MIT |
+| [paho-mqtt](https://github.com/eclipse-paho/paho.mqtt.python) | EPL-2.0 / EDL-1.0 双许可 |
 | [PyYAML](https://pyyaml.org) | MIT |
 | [pytest](https://pytest.org) | MIT |
 | [networkx](https://networkx.org) | BSD-3-Clause |
