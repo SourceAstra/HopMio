@@ -7,7 +7,7 @@
 **别动脑，喊出你的想法 —— 剩下的交给乌萨奇 🐰**
 
 面向 12 岁孩子和家长共同创作的乌萨奇主题 3D 造物工作台：\
-喊出一句话、拍张照片或画一笔涂鸦，AI 规划参数、Blender 生成真实水密模型、Bambu Studio 完成真实切片，直通拓竹 A1 mini 打印。
+喊出一句话、拍张照片或画一笔涂鸦，AI 规划参数、Blender 生成真实水密模型、Bambu Studio 完成真实切片，直通拓竹 3D 打印机。
 
 [![Release](https://img.shields.io/github/v/release/SourceAstra/HopMio?style=flat-square&label=%E5%8F%91%E8%A1%8C%E7%89%88)](https://github.com/SourceAstra/HopMio/releases)
 [![License](https://img.shields.io/badge/%E4%BB%A3%E7%A0%81-MIT-yellow?style=flat-square)](LICENSE)
@@ -49,7 +49,7 @@
 | :---: | :---: |
 | ![三栏造物桌](docs/images/workbench.png) | ![乌萨奇展厅](docs/images/gallery.png) |
 
-| 小屋工坊 · 孩子的第一个代码入口 | 打印制造站 · A1 mini 真实切片与云打印 |
+| 小屋工坊 · 孩子的第一个代码入口 | 打印制造站 · 拓竹打印机真实切片与云打印 |
 | :---: | :---: |
 | ![小屋工坊](docs/images/workshop.png) | ![打印制造站](docs/images/printing.png) |
 
@@ -172,7 +172,7 @@ pnpm package:portable        # 可选：便携版
 | `cmd/server`、`core-go` | Go 宿主服务（可零 Node.js 依赖直接运行） |
 | `backend/yaha/modeling` | 计划契约、参数编译、意图校验、成品审阅与网格复测 |
 | `backend/yaha/reconstruction` | 照片观测、相机求解、通用表面与纹理 |
-| `backend/yaha/slicing` | 官方预设展开、A1 mini 切片与真实结果检查 |
+| `backend/yaha/slicing` | 官方预设展开、拓竹打印机切片与真实结果检查 |
 | `backend/yaha/blender` | 在 Blender 内执行的可信工具与品牌资产 |
 | `backend/yaha/geometry` | 图片输入准备与网格读取 |
 | `backend/yaha/ai` | 模型注册与 JSON 协议适配 |
@@ -199,7 +199,7 @@ pnpm package:portable        # 可选：便携版
 | `.glb` | 轻量预览格式，Three.js 实时交互与切面预览 |
 | `.usagi` | 作品包（数据格式，不执行附带脚本） |
 
-打印准备台集成官方 Bambu Studio CLI 执行**真实切片**，生成 `.gcode.3mf`，精确获取层数、耗材克数与打印时长；支持拓竹 A1 mini 云协议直传实机与实时监控（需在家长设置绑定设备），并保留家长检查清单与密码确认。
+打印准备台集成官方 Bambu Studio CLI 执行**真实切片**，生成 `.gcode.3mf`，精确获取层数、耗材克数与打印时长；支持拓竹各型号打印机云协议直传实机与实时监控（需在家长设置绑定设备），并保留家长检查清单与密码确认。
 
 ## 🤝 参与贡献
 

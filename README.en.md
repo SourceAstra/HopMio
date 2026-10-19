@@ -7,7 +7,7 @@
 **Don't think too hard — shout your idea, and leave the rest to Usagi 🐰**
 
 A Usagi-themed 3D crafting workbench for kids (around 12) and parents to create together:\
-say an idea in plain words, snap a photo, or doodle something — AI plans the parameters, Blender builds a real watertight model, and Bambu Studio does real slicing, straight to a Bambu Lab A1 mini printer.
+say an idea in plain words, snap a photo, or doodle something — AI plans the parameters, Blender builds a real watertight model, and Bambu Studio does real slicing, straight to your Bambu Lab printer.
 
 [![Release](https://img.shields.io/github/v/release/SourceAstra/HopMio?style=flat-square)](https://github.com/SourceAstra/HopMio/releases)
 [![License](https://img.shields.io/badge/Code-MIT-yellow?style=flat-square)](LICENSE)
@@ -43,7 +43,7 @@ Two modeling paths are supported: **LLM parameter planning → Blender fabricati
 | :---: | :---: |
 | ![Workbench](docs/images/workbench.png) | ![Gallery](docs/images/gallery.png) |
 
-| Cottage workshop: a kid's first code entry | Print station: real A1 mini slicing & cloud print |
+| Cottage workshop: a kid's first code entry | Print station: real Bambu slicing & cloud print |
 | :---: | :---: |
 | ![Workshop](docs/images/workshop.png) | ![Print station](docs/images/printing.png) |
 
@@ -104,7 +104,7 @@ GLM (Zhipu, multimodal) and DeepSeek ship as default candidates. Photo-based ref
 | `cmd/server`, `core-go` | Go host service (can run without Node.js) |
 | `backend/yaha/modeling` | Plan contracts, parameter compilation, intent checks, design review |
 | `backend/yaha/reconstruction` | Photo observations, camera solving, surfaces & textures |
-| `backend/yaha/slicing` | A1 mini slicing and real-result checks |
+| `backend/yaha/slicing` | Bambu printer slicing and real-result checks |
 | `backend/yaha/blender` | Trusted tools executed inside Blender |
 | `backend/yaha/ai` | Model registry and JSON protocol adapters |
 | `backend/yaha/storage` | SQLite, immutable revisions, controlled assets |
