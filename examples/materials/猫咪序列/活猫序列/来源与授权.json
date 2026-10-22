@@ -1,0 +1,8 @@
+{
+  "来源": "Mixkit (https://mixkit.co) 免费素材，Mixkit License：可免费商用、无需署名",
+  "视频": {
+    "奶猫安睡-45408": "https://mixkit.co/free-stock-video/sleeping-cute-kitten-waking-up-slowly-from-a-nap-45408/",
+    "奶猫玩闹-45406": "https://mixkit.co/free-stock-video/sleepy-kitten-watching-a-toy-behind-the-camera-45406/"
+  },
+  "说明": "活猫呼吸与微动使多视角配准无法收敛（COLMAP 实测 2/40），适合照片变立体/照片小浮雕，不适合多角度实物重建"
+}
