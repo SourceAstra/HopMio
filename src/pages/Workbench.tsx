@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Box, Layers, Images, Sparkles, Download, Clock3, Printer, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { ArrowRight, Box, Layers, Images, Sparkles, Download, Clock3, Printer, PanelRightClose, PanelRightOpen, FolderOpen, X, SlidersHorizontal, MessageSquare } from 'lucide-react';
 import { useStudio } from '../state/StudioContext';
 import { isModelDraft, isGeometryOnly, reconstructionReport } from '../features/modeling/quality';
 import { GeometryReviewNotice } from '../features/modeling/GeometryReviewNotice';
 import { call, assetUrl, download } from '../api/client';
 import { IdeaPanel } from '../features/workbench/IdeaPanel';
 import { AdjustPanel } from '../features/workbench/AdjustPanel';
+import { ParameterDialog } from '../features/modeling/ParameterDialog';
 import { History } from '../features/projects/History';
 import { ModelViewer } from '../components/ModelViewer';
 import { Usagi } from '../components/Usagi';
@@ -17,7 +18,8 @@ import { WorkbenchHeader } from '../features/workbench/WorkbenchHeader';
 import { WorkbenchStagePlaceholder } from '../features/workbench/WorkbenchStagePlaceholder';
 import { HeroCraftHome } from '../features/workbench/HeroCraftHome';
 import { CraftLaunchModal, type LaunchParams } from '../features/workbench/CraftLaunchModal';
-import type { Model, Asset, Mode, Spec } from '../types';
+import { ShelfPicker } from '../features/materials/ShelfPicker';
+import type { Model, Asset, Mode, Spec, Project } from '../types';
 import { isImageAsset } from '../features/materials/folders';
 
 export function Workbench() {
@@ -31,7 +33,8 @@ export function Workbench() {
   const [inspectAssetId, setInspectAssetId] = useState<string | null>(null);
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [selectedPointMm, setSelectedPointMm] = useState<[number, number, number] | null>(null);
-  const [inspectStage, setInspectStage] = useState<number | null>(() => window.innerWidth > 1400 ? 2 : null);
+  const [inspectStage, setInspectStage] = useState<number | null>(null);
+  const [parameterProject, setParameterProject] = useState<Project | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [activePane, setActivePane] = useState<'model' | 'chat' | 'parameters'>('model');
 
@@ -93,9 +96,13 @@ export function Workbench() {
       ? saved?.source_glb_id
       : draft?.glb_id || saved?.manufacturing_glb_id || model?.glb_id || saved?.glb_id;
 
-  // 首页造物启程过渡卡状态 (命名与任务感知仲裁)
+  // 首页与展台造物启程过渡卡状态 (命名与任务感知仲裁)
   const [launchModalOpen, setLaunchModalOpen] = useState(false);
   const [launchParams, setLaunchParams] = useState<LaunchParams | null>(null);
+
+  // 展台从素材灵感架挑选照片弹窗状态
+  const [showStageShelfModal, setShowStageShelfModal] = useState(false);
+  const [stageAssetIds, setStageAssetIds] = useState<string[]>([]);
 
   // 从首页大聊天框发起造物 -> 呼出造物启程过渡卡 (不直接硬切，给用户命名与冲突感知)
   const handleStartCraftFromHome = (params: LaunchParams) => {
@@ -103,7 +110,66 @@ export function Workbench() {
     setLaunchModalOpen(true);
   };
 
-  // 用户在过渡卡确认开启新造物 (必定创建新作品，且直达造物桌自动开工)
+  // 从造物展台空状态发起文字想法造物 -> 呼出造物启程过渡卡 (对齐首页行为)
+  const handleLaunchTextCraftFromStage = (text: string) => {
+    const chosenPrompt = text.trim() || s.spec.prompt || '呆萌乌萨奇桌上多功能收纳盒';
+    const modelId = s.preferences?.active_model || 'default';
+    const modelName =
+      s.preferences?.models?.find((m) => m.id === modelId)?.name || '乌萨奇 3D 快速引擎';
+    setLaunchParams({
+      prompt: chosenPrompt,
+      mode: 'text',
+      assetIds: [],
+      modelId,
+      modelName,
+      reasoningEffort: 'medium',
+    });
+    setLaunchModalOpen(true);
+  };
+
+  // 从造物展台空状态发起照片立体化 -> 呼出素材挑选或直达过渡卡 (对齐首页行为，杜绝直接硬跳转走)
+  const handleLaunchPhotoCraftFromStage = () => {
+    if (photoIds.length > 0) {
+      const modelId = s.preferences?.active_model || 'default';
+      const modelName =
+        s.preferences?.models?.find((m) => m.id === modelId)?.name || '乌萨奇 3D 快速引擎';
+      setLaunchParams({
+        prompt: s.spec.prompt || '',
+        mode: photoIds.length > 1 ? 'multiview' : 'image',
+        assetIds: photoIds,
+        modelId,
+        modelName,
+        reasoningEffort: 'medium',
+      });
+      setLaunchModalOpen(true);
+    } else {
+      setStageAssetIds([]);
+      setShowStageShelfModal(true);
+    }
+  };
+
+  // 从展台素材弹窗确认照片后推进至过渡卡
+  const handleConfirmStagePhotos = (selectedIds: string[]) => {
+    setShowStageShelfModal(false);
+    if (selectedIds.length === 0) {
+      s.setNotice('请至少选用一张照片素材进行立体化造物');
+      return;
+    }
+    const modelId = s.preferences?.active_model || 'default';
+    const modelName =
+      s.preferences?.models?.find((m) => m.id === modelId)?.name || '乌萨奇 3D 快速引擎';
+    setLaunchParams({
+      prompt: s.spec.prompt || '',
+      mode: selectedIds.length > 1 ? 'multiview' : 'image',
+      assetIds: selectedIds,
+      modelId,
+      modelName,
+      reasoningEffort: 'medium',
+    });
+    setLaunchModalOpen(true);
+  };
+
+  // 用户在过渡卡确认开启新造物 (支持空白草稿项目复用重命名或新建作品，直达造物桌自动开工)
   const handleConfirmLaunch = async (finalProjectName: string) => {
     if (!launchParams) return;
 
@@ -122,16 +188,23 @@ export function Workbench() {
     };
     s.setSpec(nextSpec);
 
-    // 3. 首页发起的，必定是发起一个新作品
-    const newProject = await s.create(nextSpec, finalProjectName);
+    // 3. 项目仲裁：若当前正处在一个尚未生成模型且无历史版本的空白初始作品，直接重命名复用，避免产生孤儿草稿；否则新建作品
+    let targetProjectId = s.project?.id;
+    const isBlankDraft = s.project && !s.project.model && !s.project.revision_id;
+    if (isBlankDraft && targetProjectId) {
+      await s.updateProject(targetProjectId, { name: finalProjectName });
+    } else {
+      const newProject = await s.create(nextSpec, finalProjectName);
+      targetProjectId = newProject?.id;
+    }
 
     // 4. 关闭过渡卡，打开 3D 抽屉
     setLaunchModalOpen(false);
     setIsDrawerOpen(true);
 
     // 5. 立即开启造物雕刻流程 (直接触发生成，进入造物桌直接开工，无需二次回车)
-    if (newProject?.id) {
-      await s.generate(undefined, nextSpec, newProject.id);
+    if (targetProjectId) {
+      await s.generate(undefined, nextSpec, targetProjectId);
     }
   };
 
@@ -184,7 +257,7 @@ export function Workbench() {
         isDirty={s.dirty}
         isRunning={s.running}
         isBusy={s.busy}
-        revisionCount={s.project?.revision_count || 1}
+        revisionNumber={s.project?.revision_number}
         hasModel={!!s.project?.model}
         onRename={(newName) => {
           if (s.project) {
@@ -212,11 +285,17 @@ export function Workbench() {
         <summary>{s.running ? s.job?.message || '正在造物…' : '造物进度与技术详情'}</summary>
         <PipelineEnergyRail activeStage={inspectStage} onSelectStage={(stage) => { setInspectStage(stage); setActivePane('parameters'); }} />
       </details>
-      <nav className="workbench-mobile-tabs" aria-label="造物桌工作区">
-        <button aria-pressed={activePane === 'model'} onClick={() => { setActivePane('model'); setInspectStage(null); }}>模型</button>
-        <button aria-pressed={activePane === 'chat'} onClick={() => { setActivePane('chat'); setInspectStage(null); }}>对话</button>
-        <button aria-pressed={activePane === 'parameters'} onClick={() => { setInspectStage(2); setActivePane('parameters'); }}>参数</button>
-      </nav>
+      <div className="workbench-tools">
+        <span className="workbench-tools-caption">继续打磨你的作品</span>
+        <nav className="workbench-mobile-tabs" aria-label="造物桌工作区">
+          <button aria-pressed={activePane === 'model'} onClick={() => { setActivePane('model'); setInspectStage(null); }}><Box size={14} />模型</button>
+          <button aria-pressed={activePane === 'chat'} onClick={() => { setActivePane('chat'); setInspectStage(null); }}><MessageSquare size={14} />对话</button>
+          <button aria-pressed={activePane === 'parameters'} onClick={() => { setInspectStage(2); setActivePane('parameters'); }}>参数</button>
+        </nav>
+        <button className="workbench-parameter-trigger" disabled={!s.project?.model || s.running || s.busy} onClick={() => setParameterProject(s.project)}>
+          <SlidersHorizontal size={15} />参数微调
+        </button>
+      </div>
 
       {/* 核心造物桌面：左侧对话微调中枢 + 右侧呼出式 3D 抽屉面板 */}
       <div
@@ -323,7 +402,7 @@ export function Workbench() {
                   <Clock3 size={13} className="version-pill-icon" />
                   <span className="version-pill-label">版本</span>
                   <span className="version-pill-count">
-                    {s.project.revision_count ? `${s.project.revision_count}版` : 'v1'}
+                    {s.project.revision_number !== undefined ? `${s.project.revision_number}版` : '—'}
                   </span>
                   <span className="version-pill-arrow">▾</span>
                 </button>
@@ -340,6 +419,8 @@ export function Workbench() {
                 photoAssetIds={photoIds}
                 prompt={s.spec.prompt}
                 mode={s.spec.mode}
+                onStartCraftText={handleLaunchTextCraftFromStage}
+                onStartCraftPhoto={handleLaunchPhotoCraftFromStage}
                 onFillPrompt={(text) => s.setSpec({ ...s.spec, prompt: text })}
                 onGoToMaterials={() => s.setRoom('materials')}
               />
@@ -487,6 +568,11 @@ export function Workbench() {
         )}
       </div>
 
+      {parameterProject && <ParameterDialog project={s.project?.id === parameterProject.id ? s.project : parameterProject} onClose={() => setParameterProject(null)} onChat={() => {
+        setParameterProject(null); setActivePane('chat'); setInspectStage(null);
+        window.requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.idea-panel textarea')?.focus());
+      }} />}
+
       {/* 历史版本时光机弹窗：由 3D 实体位置区域的版本胶囊直接唤起 */}
       {showHistoryModal && s.project && (
         <History
@@ -494,6 +580,64 @@ export function Workbench() {
           onClose={() => setShowHistoryModal(false)}
           onSelected={() => setShowHistoryModal(false)}
         />
+      )}
+
+      {/* 造物展台发起时呼出的造物启程过渡卡 (对齐首页行为，命名与任务冲突仲裁) */}
+      {launchParams && (
+        <CraftLaunchModal
+          isOpen={launchModalOpen}
+          params={launchParams}
+          onClose={() => setLaunchModalOpen(false)}
+          onConfirmLaunch={handleConfirmLaunch}
+          onInspectCurrentJob={handleInspectCurrentJob}
+          mockConflict={Boolean((window as any).__showMockConflict)}
+        />
+      )}
+
+      {/* 展台照片立体化素材灵感架挑图弹窗 */}
+      {showStageShelfModal && (
+        <div className="hero-shelf-modal-overlay" onClick={() => setShowStageShelfModal(false)}>
+          <div className="hero-shelf-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <FolderOpen size={18} className="text-yellow" />
+                <h3>从素材灵感架挑选照片</h3>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowStageShelfModal(false)}
+                aria-label="关闭"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-hint">
+                挑选用于 3D 浮雕立牌或多角度全景重建的高清照片：
+              </p>
+              <ShelfPicker
+                value={stageAssetIds}
+                onChange={setStageAssetIds}
+                disabled={s.busy}
+                limit={96}
+              />
+            </div>
+            <div className="modal-footer">
+              <span className="selected-count-badge">
+                已选中 {stageAssetIds.length} 张照片
+              </span>
+              <button
+                type="button"
+                className="modal-confirm-btn"
+                disabled={stageAssetIds.length === 0}
+                onClick={() => handleConfirmStagePhotos(stageAssetIds)}
+              >
+                下一步 · 进入造物确认
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

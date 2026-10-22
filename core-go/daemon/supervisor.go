@@ -45,6 +45,7 @@ type Supervisor struct {
 	engineCmd *exec.Cmd
 	stdin     io.WriteCloser
 	mu        sync.Mutex
+	writeMu   sync.Mutex
 	pending   map[int64]*pendingRequest
 	seq       atomic.Int64
 	closing   atomic.Bool
@@ -205,6 +206,7 @@ func (s *Supervisor) Call(method string, params any) (json.RawMessage, error) {
 
 	replyChan := make(chan *RPCResponse, 1)
 	timer := time.NewTimer(120 * time.Second)
+	defer timer.Stop()
 
 	s.mu.Lock()
 	if s.stdin == nil {
@@ -212,8 +214,13 @@ func (s *Supervisor) Call(method string, params any) (json.RawMessage, error) {
 		return nil, errors.New("engine is not running")
 	}
 	s.pending[id] = &pendingRequest{reply: replyChan, timer: timer}
-	_, err = s.stdin.Write(data)
+	stdin := s.stdin
 	s.mu.Unlock()
+
+	// 管道写入可能等待引擎读入；响应分发必须能同时推进。
+	s.writeMu.Lock()
+	_, err = stdin.Write(data)
+	s.writeMu.Unlock()
 
 	if err != nil {
 		s.mu.Lock()

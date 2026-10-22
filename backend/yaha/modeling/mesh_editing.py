@@ -24,10 +24,10 @@ def editable_spec(spec, project, assets):
     spec.hole = False
     spec.asset_ids = [identifier for identifier in spec.asset_ids if assets.db.get("assets", identifier) and assets.db.get("assets", identifier).get("extension") in (".png", ".jpg", ".jpeg", ".webp")]
     spec.modeling_plan = GeometryPlan.model_validate({
-        "schema_version": 7, "title": "保留原网格的细节编辑",
+        "schema_version": 8, "title": "保留原网格的细节编辑",
         "source_prompt": spec.prompt, "source_asset_ids": spec.asset_ids,
         "source_mesh": {"asset_id": asset_id, "sha256": hashlib.sha256(content).hexdigest(), "scale": {"parameter": "mesh_scale"}},
-        "parameters": {"mesh_scale": {"value": 1, "label": "整体比例", "unit": "ratio"}},
+        "parameters": {"mesh_scale": {"value": 1, "label": "整体比例", "unit": "ratio", "ui": {"display_label": "整体大小", "control": "slider", "min": 0.1, "max": 2, "step": 0.05, "description": "等比放大或缩小，保持造型比例"}}},
         "steps": [], "constraints": [{"feature": "model.height", "expected_mm": {"op": "multiply", "args": [height, {"parameter": "mesh_scale"}]}, "max_error_mm": 0.01}],
         "assumptions": ["保留当前制造网格，通过局部布尔工具修改；原始扫描与历史版本保留。"],
     })

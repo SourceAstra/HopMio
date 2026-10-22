@@ -20,6 +20,8 @@ const proposal = {
 assert.equal(proposalBlockReason(proposal, 'r1', spec), null);
 assert.match(proposalBlockReason(proposal, 'r2', spec), /旧模型版本/);
 assert.match(proposalBlockReason(proposal, 'r1', { ...spec, width_mm: 60 }), /参数已改变/);
+assert.equal(proposalBlockReason(proposal, 'r1', { ...spec, prompt: '补充描述', asset_ids: ['photo'] }), null);
+assert.match(proposalBlockReason(proposal, 'r1', { ...spec, modeling_plan: { parameters: { wall: 4, height: 50 } } }), /参数已改变/);
 const messages = [
   { id: 'a', sender: 'user', content: '添加镂空文字Usagi' },
   { id: 'b', sender: 'assistant', proposal: { ...proposal, superseded: true } },

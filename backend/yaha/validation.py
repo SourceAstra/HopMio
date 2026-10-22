@@ -3,7 +3,7 @@
 import hashlib
 import json
 from datetime import datetime, timezone
-from .geometry.models import load_mesh
+from .geometry.models import load_mesh, split_shells
 
 
 def profile_hash(profile):
@@ -15,7 +15,7 @@ def inspect(project, assets, profile):
     limit = 180 - 2 * profile.margin_mm
     fits = bool((mesh.extents <= limit).all())
     closed = bool(mesh.is_watertight and mesh.is_winding_consistent and mesh.volume > 0)
-    parts = list(mesh.split(only_watertight=False))
+    parts, cavities = split_shells(mesh)
     components = len(parts)
     # 独立且离开底面的部件不会因整体网格封闭而自动连接到主体。
     floating = sum(float(part.bounds[0][2] - mesh.bounds[0][2]) > 0.2 for part in parts)
@@ -57,4 +57,5 @@ def inspect(project, assets, profile):
         "items": items,
         "size_mm": mesh.extents.round(2).tolist(),
         "components": components,
+        "cavity_shells": len(cavities),
     }

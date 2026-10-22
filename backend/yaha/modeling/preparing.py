@@ -31,6 +31,13 @@ def prepare(spec, assets, repair=False, *, job=None, observer=None, adjustment_i
             raise DomainError("方案没有可复测的尺寸约束，请重新设计。", "PLAN_MEASUREMENT")
         request = {"plan": compile_plan(plan)}
         validate_intent(spec, plan, request["plan"], adjustment_intent)
+        if not plan.source_mesh and not adjustment_intent:
+            dimensions = {"model.height": spec.height_mm}
+            if spec.mode == Mode.TEXT and not spec.asset_ids:
+                dimensions.update({"model.width": spec.width_mm, "model.depth": spec.depth_mm})
+            request["plan"]["constraints"] = [rule for rule in request["plan"]["constraints"] if rule["feature"] not in dimensions] + [
+                {"feature": feature, "expected_mm": expected, "max_error_mm": 0.05} for feature, expected in dimensions.items()
+            ]
         has_base = any(step.id == "base" and step.operation == "add" for step in plan.steps)
         has_hole = any(step.operation == "subtract" and ("hole" in step.id.lower() or "孔" in step.name) for step in plan.steps)
         request["finish"] = finish(spec) | {"base": spec.base and not has_base, "hole": spec.hole and not has_hole, "thickness_mm": spec.bottom_mm, "footprint": bool(plan.surface)}

@@ -2,7 +2,7 @@
 
 import numpy as np
 from ..contracts import DomainError
-from ..geometry.models import load_mesh
+from ..geometry.models import load_mesh, split_shells
 
 
 def hits(mesh, origin, direction):
@@ -28,9 +28,9 @@ def hits(mesh, origin, direction):
 
 def verify(path, manifest, constraints, observer=None):
     mesh = load_mesh(path)
-    parts = mesh.split(only_watertight=False)
+    parts, cavities = split_shells(mesh)
     if observer:
-        observer({"source_topology": manifest.get("topology"), "faces": len(mesh.faces), "watertight": bool(mesh.is_watertight), "is_volume": bool(mesh.is_volume), "components": len(parts), "parts": [{"bounds_mm": part.bounds.round(4).tolist(), "faces": len(part.faces), "watertight": bool(part.is_watertight)} for part in parts]})
+        observer({"source_topology": manifest.get("topology"), "faces": len(mesh.faces), "watertight": bool(mesh.is_watertight), "is_volume": bool(mesh.is_volume), "components": len(parts), "cavity_shells": len(cavities), "cavities": [{"bounds_mm": part.bounds.round(4).tolist(), "signed_volume_mm3": float(part.volume)} for part in cavities], "parts": [{"bounds_mm": part.bounds.round(4).tolist(), "faces": len(part.faces), "watertight": bool(part.is_watertight)} for part in parts]})
     if not mesh.is_volume or not mesh.is_watertight or len(parts) > 10:
         raise DomainError(f"Blender 网格复测未通过：{len(parts)} 个部件，封闭={bool(mesh.is_watertight)}，有效实体={bool(mesh.is_volume)}。", "BLENDER_GEOMETRY")
     measurements = dict(zip(("model.width", "model.depth", "model.height"), mesh.extents.tolist()))
@@ -50,8 +50,10 @@ def verify(path, manifest, constraints, observer=None):
     for rule in constraints:
         measured = measurements.get(rule["feature"])
         error = None if measured is None else abs(measured - rule["expected_mm"])
-        report.append(rule | {"measured_mm": measured, "error_mm": error, "status": "unverified" if measured is None else "pass" if error <= rule["max_error_mm"] else "fail"})
-    if any(item["status"] != "pass" for item in report):
-        failed = next(item for item in report if item["status"] != "pass")
-        raise DomainError("尺寸复测未通过：" + failed["feature"] + "，请修改参数或重新设计。", "BLENDER_DIMENSION")
+        tolerance = min(rule["max_error_mm"], 0.05)
+        report.append(rule | {"max_error_mm": tolerance, "measured_mm": measured, "error_mm": error, "status": "unverified" if measured is None else "pass" if error <= tolerance else "fail"})
+    failed = [item for item in report if item["status"] != "pass"]
+    if failed:
+        details = "；".join(f"{item['feature']}，目标{item['expected_mm']} mm，实际{item['measured_mm']} mm，允许误差{item['max_error_mm']} mm" for item in failed[:8])
+        raise DomainError(f"尺寸复测未通过：{details}。请修改参数或重新设计。", "BLENDER_DIMENSION")
     return mesh, report

@@ -51,7 +51,7 @@ class Decoder:
             self.parts.append(text)
 
     def result(self):
-        if self.stop_reason in ("length", "max_tokens"):
+        if self.stop_reason in ("length", "max_tokens", "model_length"):
             raise DomainError("模型输出达到 token 上限，方案不完整。请增加模型输出预算或简化需求。", "AI_OUTPUT_LIMIT")
         if not self.complete or not self.parts:
             raise DomainError("模型连接结束，但没有返回完整方案。", "AI_RESPONSE")

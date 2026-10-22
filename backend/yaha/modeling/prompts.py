@@ -36,14 +36,18 @@ def render_prompts(spec, correction=None, *, review=False, adjustment=None, mode
             "assessment_schema": json.dumps(assessment_schema, ensure_ascii=False),
         }
         if spec.modeling_plan and spec.modeling_plan.source_mesh:
-            context["description"] += "\n当前为原网格编辑：输出 schema_version=7，原样保留 source_mesh.asset_id/sha256，以该真实网格为主体；steps 仅添加必要的局部工具，可从 subtract 开始。不得用基本几何重新拼出主体，surface 必须为 null。source_mesh.scale 只在明确要求整体缩放时更改；未要求改变的原工具与尺寸须保留。工具使用原制造 STL 的坐标：毫米、Z向上、底面Z=0。"
-            context["adjustment"] += "\n必须保留现有 source_mesh 身份，使用 v7 网格编辑；不得替换主体或全局重塑。"
-        if correction:
-            context.update(correction)
-            return Template(data["system_prompt"]).substitute(context), Template(data["repair_prompt"]).substitute(context)
+            context["description"] += "\n当前为原网格编辑：输出 schema_version=8，原样保留 source_mesh.asset_id/sha256，以该真实网格为主体；steps 仅添加必要的局部工具，可从 subtract 开始。不得用基本几何重新拼出主体，surface 必须为 null。source_mesh.scale 只在明确要求整体缩放时更改；未要求改变的原工具与尺寸须保留。工具使用原制造 STL 的坐标：毫米、Z向上、底面Z=0。"
+            context["adjustment"] += "\n必须保留现有 source_mesh 身份，使用 v8 网格编辑；不得替换主体或全局重塑。"
         if assessment_schema:
+            # 审阅只接收用户固定项，不将待审方案的名称、假设与形状自述当作证据。
+            context["previous_plan"] = json.dumps({name: parameter.model_dump() for name, parameter in spec.modeling_plan.parameters.items() if parameter.locked} if spec.modeling_plan else {}, ensure_ascii=False)
             return tuple(Template(data[key]).substitute(context) for key in ("assessment_system_prompt", "assessment_prompt"))
         prompt_key = "assessment_prompt" if assessment_schema else "review_prompt" if review else "adjust_prompt" if adjustment else "user_prompt"
-        return tuple(Template(data[key]).substitute(context) for key in ("system_prompt", prompt_key))
+        mode_context = context | {"previous_plan": "见下方纠错数据中的现有造型。"} if correction else context
+        instruction, prompt = (Template(data[key]).substitute(mode_context) for key in ("system_prompt", prompt_key))
+        if correction:
+            context.update(correction)
+            prompt += "\n" + Template(data["repair_prompt"]).substitute(context)
+        return instruction, prompt
     except (OSError, ValueError, TypeError, KeyError, yaml.YAMLError):
         raise DomainError("无法读取 config/modeling-prompts.yaml，请检查版本、提示词和变量名称。", "AI_PROMPT_CONFIG") from None

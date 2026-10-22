@@ -29,18 +29,18 @@ export function PlanControls() {
         <Blocks size={18} />
         <strong>乌萨奇的造物方案</strong>
       </div>
-      <p>AI 设计参数，Blender 在本地制作。照片用于外观参考，请确认尺寸与简化。</p>
+      <p>{plan?.generator ? '注册生成器直接驱动本地 Blender，调整参数后保存新版本。照片仅供比对。' : 'AI 设计参数，Blender 在本地制作。照片用于外观参考，请确认尺寸与简化。'}</p>
       {!s.preferences?.blender?.available && (
         <button className="link" onClick={() => s.setRoom('settings')}>
           先安装本地 Blender →
         </button>
       )}
-      {!configured && (
+      {!plan?.generator && !configured && (
         <button className="link" onClick={() => s.setRoom('settings')}>
           请家长配置 AI 服务并开启云端 →
         </button>
       )}
-      <button
+      {!plan?.generator && <button
         className="secondary"
         disabled={
           s.busy || s.running || !configured || (!s.spec.prompt.trim() && !s.spec.asset_ids.length)
@@ -48,11 +48,11 @@ export function PlanControls() {
         onClick={() => void s.design()}
       >
         <Sparkles size={16} /> {plan ? '让 AI 重新设计' : '让 AI 设计方案'}
-      </button>
+      </button>}
       {plan && (
         <>
           <h3>{plan.title}</h3>
-          <small>{plan.steps.length} 个步骤 · 尺寸可在“调整作品”中修改</small>
+          <small>{plan.generator ? `本地生成器 v${plan.generator.version}` : `${plan.steps.length} 个步骤`} · 尺寸可在“调整作品”中修改</small>
           <ol className="modeling-steps">
             {plan.steps.map((step, index) => (
               <li key={index}>

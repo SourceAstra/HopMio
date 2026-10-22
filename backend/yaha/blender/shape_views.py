@@ -1,4 +1,4 @@
-"""参考造型的实际三视图，用于照片对照；不冒充标定相机投影。"""
+"""覆盖四周与上下表面的实际审阅视图，不冒充标定相机投影。"""
 
 import math
 import json
@@ -40,14 +40,15 @@ def render_views(body, directory, progress):
         light.location = center + Vector(position) * span
         light.rotation_euler = (center - light.location).to_track_quat('-Z', 'Y').to_euler()
         light.data.energy, light.data.size = 120 * span ** 2, span * 2
-    views = (("front", 0), ("right", 90), ("back", 180), ("left", 270), ("front-right", 45), ("back-left", 225))
-    scene["yaha_review_views"] = json.dumps([{"position": name, "yaw_deg": yaw} for name, yaw in views])
-    width, height = 1536, 1024
+    views = (("front", 0, 10), ("right", 90, 10), ("back", 180, 10), ("left", 270, 10), ("front-right", 45, 10), ("back-left", 225, 10), ("top", 0, 90), ("bottom", 0, -90))
+    scene["yaha_review_views"] = json.dumps([{"position": name, "yaw_deg": yaw, "pitch_deg": pitch} for name, yaw, pitch in views])
+    columns = 4
+    width, height = 512 * columns, 1024
     pixels = array('f', [1]) * (width * height * 4)
-    for index, (_, yaw) in enumerate(views):
-        progress(76 + index, "生成包含背面与左右侧面的实际造型六视图")
-        angle = math.radians(yaw)
-        camera.location = center + Vector((math.sin(angle) * 4, -math.cos(angle) * 4, 0.7)) * span
+    for index, (_, yaw, pitch) in enumerate(views):
+        progress(76 + index, "生成包含四周与上下表面的实际造型八视图")
+        angle, elevation = math.radians(yaw), math.radians(pitch)
+        camera.location = center + Vector((math.sin(angle) * math.cos(elevation), -math.cos(angle) * math.cos(elevation), math.sin(elevation))) * (span * 4)
         camera.rotation_euler = (center - camera.location).to_track_quat('-Z', 'Y').to_euler()
         scene.render.filepath = str(directory / ("view-" + str(index) + ".png"))
         bpy.ops.render.render(write_still=True)
@@ -55,7 +56,7 @@ def render_views(body, directory, progress):
         block = array('f', [0]) * (512 * 512 * 4)
         view.pixels.foreach_get(block)
         for row in range(512):
-            offset = (((1 - index // 3) * 512 + row) * width + (index % 3) * 512) * 4
+            offset = (((1 - index // columns) * 512 + row) * width + (index % columns) * 512) * 4
             pixels[offset:offset + 512 * 4] = block[row * 512 * 4:(row + 1) * 512 * 4]
         bpy.data.images.remove(view)
     sheet = bpy.data.images.new("造型三视图", width=width, height=height)

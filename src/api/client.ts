@@ -1,9 +1,10 @@
 export async function call<T>(method: string, params: unknown = {}): Promise<T> {
   if (window.yaha) return window.yaha.call(method, params) as Promise<T>;
-  const response = await fetch('/api/rpc', {
+  const recompute = method === 'model.parameters.apply';
+  const response = await fetch(recompute ? '/api/blender/recompute' : '/api/rpc', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ method, params }),
+    body: JSON.stringify(recompute ? params : { method, params }),
   });
   const answer = await response.json();
   if (answer.error) throw Object.assign(new Error(answer.error.message), { code: answer.error.code });

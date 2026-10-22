@@ -35,7 +35,7 @@ def build_with_correction(service, spec, job, **options):
         job.record(modeling_correction={"attempt": 1, "code": error.code, "message": str(error), "plan": spec.modeling_plan.model_dump()})
         job.progress(5, "根据实际网格复测修正部件连接与尺寸")
         job.check()
-        design_plan(service, spec, job, correction=correction)
+        design_plan(service, spec, job, correction=correction, adjustment=adj, deadline=options.get("deadline"))
         return build_model(service, spec, job, **options)
 
 
@@ -87,19 +87,21 @@ def fit_outline(service, spec, request, result, job, low, high, *, deadline=None
             fitted = service.outline_fitter.fit(spec, built.private_files["body"], service.assets, job, progress, **({"deadline": deadline} if deadline is not None else {}))
             report = fitted.report
             if fitted.mesh:
+                retained = report | {"status": "unchanged", "after_iou": report["before_iou"], "observations": report["original_observations"], "view_scores": [view["before_iou"] for view in report["views"]]}
+                report = retained
                 compiled = compile_plan(spec.modeling_plan)
                 payload = request | {"plan": compiled | {"steps": []}, "preserve_topology": True, "progress_range": (low + (high - low) * 0.65, high), "reference_shift_m": built.manifest["export_shift_m"]}
                 candidate = service.modelers[spec.provider].build(payload, {"input.json": fitted.mesh, "reference.blend": built.files["blend"]}, job)
                 candidate_result = measure(candidate, payload, job)
-                evaluated = service.outline_fitter.evaluate(candidate.private_files["body"], report | {"job_id": job.id})
+                evaluated = service.outline_fitter.evaluate(candidate.private_files["body"], fitted.report | {"job_id": job.id})
                 if evaluated["after_iou"] > report["before_iou"] + 0.002 and all(after >= before["before_iou"] - 0.025 for after, before in zip(evaluated["view_scores"], report["views"])):
                     result, report = candidate_result, evaluated
                 else:
-                    report = report | {"status": "unchanged", "after_iou": report["before_iou"], "observations": report["original_observations"], "message": "闭合后未保留轮廓改善，使用原有造型。"}
+                    report = retained | {"message": "闭合后未保留轮廓改善，使用原有造型。"}
         except DomainError as error:
             if error.code == "CANCELED":
                 raise
-            report = {"status": "draft_retained", "message": str(error)}
+            report = report | {"status": "draft_retained", "error_code": error.code, "message": str(error)}
         finally:
             service.outline_fitter.discard(job.id)
     result[0].manifest["outline_fit"] = report

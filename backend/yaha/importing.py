@@ -26,9 +26,9 @@ def import_package(encoded, assets, projects):
                 raise DomainError("作品包解压后过大。")
             data = json.loads(package.read("project.json"))
             version = data.get("schema_version")
-            if version not in (1, 2, 3, 4):
+            if version not in (1, 2, 3, 4, 5):
                 raise DomainError("这个作品包的版本暂时不支持。")
-            if version in (2, 3, 4):
+            if version in (2, 3, 4, 5):
                 files = data["files"]
                 if set(files) != set(names) - {"project.json"}:
                     raise DomainError("作品包文件清单不一致。")

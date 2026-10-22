@@ -5,14 +5,14 @@ import operator
 import numpy as np
 from scipy.spatial.transform import Rotation
 from shapely.geometry import LineString, Polygon
-from .contracts import Expression, Reference
+from .contracts import Expression, Reference, Parameter
 from ..contracts import DomainError
 
 OPERATORS = {"add": operator.add, "subtract": operator.sub, "multiply": operator.mul, "divide": operator.truediv}
 
 
 def compiled_geometry(compiled):
-    return ([{key: value for key, value in step.items() if key != "name"} for step in compiled["steps"]], compiled["surface"], compiled.get("source_mesh"))
+    return ([{key: value for key, value in step.items() if key != "name"} for step in compiled["steps"]], compiled["surface"], compiled.get("source_mesh"), compiled.get("generator"))
 
 
 def value(item, parameters, depth=0):
@@ -22,6 +22,8 @@ def value(item, parameters, depth=0):
         if item.parameter not in parameters:
             raise DomainError("方案引用了不存在的参数。", "PLAN_REFERENCE")
         result = parameters[item.parameter].value
+        if isinstance(result, bool):
+            raise DomainError("开关只能控制可选节点，不能用于尺寸或角度计算。", "PLAN_UNIT")
     elif isinstance(item, Expression):
         a, b = (value(arg, parameters, depth + 1) for arg in item.args)
         if item.op == "divide" and abs(b) < 1e-9:
@@ -48,7 +50,7 @@ def unit(item, parameters, depth=0):
         valid, result = a == b or a is None or b is None, a or b
     elif item.op == "multiply":
         valid = a in (None, "ratio") or b in (None, "ratio")
-        result = b if a in (None, "ratio") else a
+        result = b if a == "ratio" else a if b == "ratio" else a or b
     else:
         valid = b in (None, "ratio") or a == b
         result = "ratio" if a == b and a is not None else a
@@ -64,18 +66,67 @@ def resolve(item, parameters, expected="mm"):
     return value(item, parameters)
 
 
+def bound_parameters(plan):
+    parameters = dict(plan.parameters)
+    visiting = set()
+
+    def bind(name, depth=0):
+        if name in parameters:
+            return
+        if depth > 8 or name in visiting:
+            raise DomainError("几何绑定循环或依赖过深。", "PLAN_BINDING")
+        if name not in plan.geometry_bindings:
+            raise DomainError("几何绑定引用了不存在的参数。", "PLAN_REFERENCE")
+        visiting.add(name)
+        expression = plan.geometry_bindings[name]
+
+        def dependencies(item):
+            if isinstance(item, Reference):
+                bind(item.parameter, depth + 1)
+            if isinstance(item, Expression):
+                for argument in item.args:
+                    dependencies(argument)
+
+        dependencies(expression)
+        parameters[name] = Parameter(value=value(expression, parameters), label=name, unit=unit(expression, parameters) or "mm")
+        visiting.remove(name)
+
+    for name in plan.geometry_bindings:
+        bind(name)
+    return parameters
+
+
+def enabled_step(step, parameters):
+    if isinstance(step.enabled, bool):
+        return step.enabled
+    parameter = parameters.get(step.enabled.parameter)
+    if not parameter or not isinstance(parameter.value, bool):
+        raise DomainError("可选节点必须引用布尔开关。", "PLAN_BINDING")
+    return parameter.value
+
+
 def compile_plan(plan):
+    if plan.generator:
+        from .generators import compile_generator
+        return compile_generator(plan)
+    parameters = bound_parameters(plan)
     steps = []
     for step in plan.steps:
+        if not enabled_step(step, parameters):
+            continue
         data = step.model_dump()
-        data["center_mm"] = [resolve(item, plan.parameters) for item in step.center_mm]
-        data["size_mm"] = [resolve(item, plan.parameters) for item in step.size_mm] if step.size_mm else None
-        data["rotation_deg"] = [resolve(item, plan.parameters, "deg") for item in step.rotation_deg]
-        data["points"] = [[resolve(item, plan.parameters, "ratio" if step.shape == "cushion" else "mm") for item in point] for point in step.points]
+        data.pop("enabled")
+        data["center_mm"] = [resolve(item, parameters) for item in step.center_mm]
+        data["size_mm"] = [resolve(item, parameters) for item in step.size_mm] if step.size_mm else None
+        data["rotation_deg"] = [resolve(item, parameters, "deg") for item in step.rotation_deg]
+        data["points"] = [[resolve(item, parameters, "ratio" if step.shape == "cushion" else "mm") for item in point] for point in step.points]
+        if step.shape == "revolve" and data["size_mm"] is None:
+            radius = max(point[0] for point in data["points"])
+            data["size_mm"] = [2 * radius, 2 * radius, max(point[1] for point in data["points"]) - min(point[1] for point in data["points"])]
         for field in ("wall_mm", "bottom_mm", "bevel_mm", "corner_radius_mm"):
-            data[field] = resolve(getattr(step, field), plan.parameters)
-        data["sections"] = [{"z_mm": resolve(section.z_mm, plan.parameters), "width_mm": resolve(section.width_mm, plan.parameters), "depth_mm": resolve(section.depth_mm, plan.parameters), "offset_mm": [resolve(item, plan.parameters) for item in section.offset_mm], "exponent": section.exponent} for section in step.sections]
-        data["path"] = [{"position_mm": [resolve(item, plan.parameters) for item in section.position_mm], "width_mm": resolve(section.width_mm, plan.parameters), "depth_mm": resolve(section.depth_mm, plan.parameters), "twist_deg": resolve(section.twist_deg, plan.parameters, "deg")} for section in step.path]
+            data[field] = resolve(getattr(step, field), parameters)
+        data["sections"] = [{"z_mm": resolve(section.z_mm, parameters), "width_mm": resolve(section.width_mm, parameters), "depth_mm": resolve(section.depth_mm, parameters), "offset_mm": [resolve(item, parameters) for item in section.offset_mm], "exponent": section.exponent} for section in step.sections]
+        data["path"] = [{"position_mm": [resolve(item, parameters) for item in section.position_mm], "width_mm": resolve(section.width_mm, parameters), "depth_mm": resolve(section.depth_mm, parameters), "twist_deg": resolve(section.twist_deg, parameters, "deg")} for section in step.path]
         if step.shape == "sweep":
             path = data["path"]
             if any(not 0.4 <= section[key] <= 500 for section in path for key in ("width_mm", "depth_mm")) or any(abs(p) > 500 for section in path for p in section["position_mm"]):
@@ -136,13 +187,15 @@ def compile_plan(plan):
             raise DomainError("组合后的部件世界坐标超出500毫米范围。", "PLAN_RANGE")
         data['frame_m'] = frame.tolist()
         steps.append(data)
+    if not plan.source_mesh and (not steps or steps[0]["operation"] != "add"):
+        raise DomainError("关闭节点后仍须保留主体实体。", "PLAN_GEOMETRY")
     constraints = []
     cups = {step["id"] for step in steps if step["shape"] == "cup"}
     for rule in plan.constraints:
         part, feature = rule.feature.split(".")
         if part != "model" and part not in cups:
             raise DomainError("该特征尚无可用的尺寸检查器。", "PLAN_MEASUREMENT")
-        expected = resolve(rule.expected_mm, plan.parameters)
+        expected = resolve(rule.expected_mm, parameters)
         if expected <= 0:
             raise DomainError("尺寸约束必须为正数。", "PLAN_RANGE")
         constraints.append({"feature": rule.feature, "expected_mm": expected, "max_error_mm": rule.max_error_mm})
@@ -157,16 +210,14 @@ def compile_plan(plan):
     if plan.surface:
         if any(step.shape == "text" for step in plan.steps):
             raise DomainError("真实文字须保留精确实体模式（surface=null），禁止在刻字后体素重塑并抹掉细节。", "PLAN_GEOMETRY")
-        surface = {"height_mm": resolve(plan.surface.height_mm, plan.parameters), "voxel_mm": resolve(plan.surface.voxel_mm, plan.parameters), "smooth_iterations": plan.surface.smooth_iterations}
+        surface = {"height_mm": resolve(plan.surface.height_mm, parameters), "voxel_mm": resolve(plan.surface.voxel_mm, parameters), "smooth_iterations": plan.surface.smooth_iterations}
         if not 10 <= surface["height_mm"] <= 500 or not 0.12 <= surface["voxel_mm"] <= 1:
             raise DomainError("参考造型高度须在10–500毫米，曲面精度须在0.12–1毫米。", "PLAN_RANGE")
-        if any(rule["feature"] != "model.height" for rule in constraints):
-            raise DomainError("等比制作的参考造型只约束成品高度；结构件请保留精确实体模式。", "PLAN_MEASUREMENT")
         if not any(rule["feature"] == "model.height" and abs(rule["expected_mm"] - surface["height_mm"]) < 1e-6 for rule in constraints):
             raise DomainError("参考造型须约束与曲面设置一致的成品高度。", "PLAN_MEASUREMENT")
     source = None
     if plan.source_mesh:
-        scale = resolve(plan.source_mesh.scale, plan.parameters, "ratio")
+        scale = resolve(plan.source_mesh.scale, parameters, "ratio")
         if not 0.01 <= scale <= 100:
             raise DomainError("原始网格的缩放比例须在0.01–100倍以内。", "PLAN_RANGE")
         source = plan.source_mesh.model_dump() | {"scale": scale}

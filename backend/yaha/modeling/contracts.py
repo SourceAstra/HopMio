@@ -1,7 +1,7 @@
-"""建模计划 v6：精确实体、自由曲面、文字与部件相对坐标。"""
+"""建模计划 v9：保留旧几何契约，新增版本化本地生成器引用。"""
 
 from typing import Annotated, Literal, Union
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 
 Number = Annotated[float, Field(allow_inf_nan=False, ge=-2000, le=2000)]
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z][a-zA-Z0-9_]{0,47}$")]
@@ -12,11 +12,37 @@ class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
+class ParameterUI(Contract):
+    display_label: str = Field(min_length=1, max_length=30)
+    control: Literal["slider", "switch"] = "slider"
+    min: Number | None = None
+    max: Number | None = None
+    step: float | None = Field(default=None, gt=0, le=2000)
+    description: str = Field(default="", max_length=120)
+
+
 class Parameter(Contract):
-    value: Number
+    value: StrictBool | Number
     label: str = Field(min_length=1, max_length=60)
     unit: Literal["mm", "deg", "ratio"] = "mm"
     locked: bool = False
+    ui: ParameterUI | None = None
+
+    @model_validator(mode="after")
+    def controls(self):
+        if isinstance(self.value, bool) and (self.unit != "ratio" or not self.ui or self.ui.control != "switch"):
+            raise ValueError("布尔参数须使用 ratio 单位并声明 switch 控件")
+        if not self.ui:
+            return self
+        ui = self.ui
+        if ui.control == "switch":
+            if not isinstance(self.value, bool) or any(item is not None for item in (ui.min, ui.max, ui.step)):
+                raise ValueError("开关仅接受布尔值，不定义数值范围")
+        elif isinstance(self.value, bool) or any(item is None for item in (ui.min, ui.max, ui.step)) or not ui.min < ui.max or not ui.min <= self.value <= ui.max:
+            raise ValueError("滑块须声明有效范围、步长及范围内初值")
+        elif any(abs((number - ui.min) / ui.step - round((number - ui.min) / ui.step)) > 1e-6 for number in (self.value, ui.max)):
+            raise ValueError("滑块初值和上限必须与步长对齐")
+        return self
 
 
 class Reference(Contract):
@@ -70,9 +96,10 @@ class ReferenceView(Contract):
 class GeometryStep(Contract):
     id: Identifier
     name: str = Field(min_length=1, max_length=60)
+    enabled: StrictBool | Reference = True
     operation: Literal["add", "subtract", "intersect"] = "add"
     shape: Literal["box", "rounded_box", "text", "cylinder", "ellipsoid", "star", "polygon", "revolve", "loft", "sweep", "cushion", "cup", "usagi"] = Field(description="usagi 导入完整、已融合的角色网格，内含头、身体、耳朵、左右手臂、脚和表情，不是无四肢的素体。内置部位不能通过删除独立步骤移除；需先用局部 subtract 工具切除目标几何，再按需添加替换部件，保持其他区域不变。rounded_box 是 XY 平面精确圆角矩形沿 Z 挤出；text 是 text 字段的真实字体轮廓沿 Z 挤出，XY 在 size_mm 范围内等比适配，Z 是精确挤出厚度。其他 shape 为单独几何工具。")
-    coordinate_origin: Literal["bounds_center", "local_origin"] = Field(description="bounds_center：原始包围盒中心归零后旋转并平移；local_origin：保留原始局部坐标，旋转后平移。")
+    coordinate_origin: Literal["bounds_center", "local_origin"] = Field(description="bounds_center：原始包围盒中心归零后旋转并平移；local_origin：保留原始局部坐标，旋转后平移，仅允许 loft、sweep、revolve；其他形状（含 polygon）必须使用 bounds_center。")
     relative_to: Identifier | None = Field(default=None, description="可选父部件 id，必须引用更早的步骤；center_mm 与 rotation_deg 在父部件局部坐标中定义，执行器组合完整刚体变换，禁止手动叠加欧拉角。")
     size_mm: tuple[Scalar, Scalar, Scalar] | None = None
     center_mm: tuple[Scalar, Scalar, Scalar] = (0, 0, 0)
@@ -98,8 +125,8 @@ class GeometryStep(Contract):
             raise ValueError("corner_radius_mm 只用于精确圆角矩形")
         if self.coordinate_origin == "local_origin" and self.shape not in ("loft", "sweep", "revolve"):
             raise ValueError("只有放样、扫掠与旋转轮廓支持 local_origin；其他工具使用 bounds_center")
-        if (self.shape == "sweep") != (self.size_mm is None):
-            raise ValueError("扫掠由路径和截面确定尺寸；其他工具须提供 size_mm")
+        if (self.shape == "sweep" and self.size_mm is not None) or (self.shape not in ("sweep", "revolve") and self.size_mm is None):
+            raise ValueError("扫掠由路径和截面确定尺寸；旋转轮廓可省略 size_mm；其他工具须提供 size_mm")
         if (self.shape == "sweep" and len(self.path) < 2) or (self.shape != "sweep" and self.path):
             raise ValueError("扫掠需要至少两个截面；其他工具不接收 path")
         if self.shape in ("polygon", "revolve", "cushion") and len(self.points) < 3:
@@ -129,13 +156,20 @@ class PlanOptions(Contract):
     hole_shape: Literal["round", "heart"]
 
 
+class GeneratorReference(Contract):
+    id: Identifier
+    version: int = Field(ge=1, le=1000)
+
+
 class GeometryPlan(Contract):
-    schema_version: Literal[3, 4, 5, 6, 7] = 7
+    schema_version: Literal[3, 4, 5, 6, 7, 8, 9] = 7
+    generator: GeneratorReference | None = Field(default=None, description="仅用于已注册的本地生成器，须使用 v9；AI 几何步骤方案保持 null。")
     title: str = Field(min_length=1, max_length=80)
     source_prompt: str = Field(default="", max_length=3000)
     source_asset_ids: list[str] = Field(default_factory=list, max_length=96)
     model_label: str = Field(default="", max_length=100)
     parameters: dict[Identifier, Parameter] = Field(min_length=1, max_length=48)
+    geometry_bindings: dict[Identifier, Scalar] = Field(default_factory=dict, max_length=32)
     steps: list[GeometryStep] = Field(default_factory=list, max_length=48)
     source_mesh: MeshSource | None = None
     source_options: PlanOptions | None = None
@@ -169,11 +203,19 @@ class GeometryPlan(Contract):
 
     @model_validator(mode="after")
     def identity(self):
-        if not self.steps and not self.source_mesh:
+        if self.generator and (self.schema_version < 9 or self.steps or self.source_mesh or self.surface or self.geometry_bindings):
+            raise ValueError("注册生成器须使用 v9，不能混入几何步骤、源网格、曲面重塑或派生绑定")
+        if self.geometry_bindings.keys() & self.parameters.keys():
+            raise ValueError("派生绑定不能覆盖主参数或内部参数")
+        if self.schema_version < 8 and (self.geometry_bindings or any(p.ui for p in self.parameters.values()) or any(step.enabled is not True for step in self.steps)):
+            raise ValueError("UI 参数、派生绑定及可选节点须使用 v8")
+        if self.schema_version >= 8 and not 1 <= sum(p.ui is not None for p in self.parameters.values()) <= 6:
+            raise ValueError("v8 方案须声明 1–6 个用户可调主参数，其余参数保持内部使用")
+        if not self.steps and not self.source_mesh and not self.generator:
             raise ValueError("方案需要原始网格或至少一个实体步骤")
         if self.source_mesh and (self.schema_version < 7 or self.surface):
             raise ValueError("原始网格编辑须使用 v7 且 surface=null，保留源网格细节")
-        if not self.source_mesh and self.steps[0].operation != "add":
+        if self.steps and not self.source_mesh and self.steps[0].operation != "add":
             raise ValueError("第一步必须添加实体")
         ids = [step.id for step in self.steps]
         if len(set(ids)) != len(ids):

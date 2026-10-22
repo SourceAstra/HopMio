@@ -1,0 +1,49 @@
+/* 脚本工作台复用微调面板的 Morning Pearl / 深色主题变量。 */
+.parameter-mode-switch { display: flex; gap: 4px; align-self: flex-start; margin: 0 28px 18px; padding: 4px; border: 1px solid var(--tune-line); border-radius: 12px; background: var(--tune-well); }
+.parameter-mode-switch, .script-actions { flex-shrink: 0; }
+.parameter-mode-switch button { min-height: 38px; padding: 8px 16px; border: 0; border-radius: 8px; color: var(--tune-muted); font-size: 12px; }
+.parameter-mode-switch button[aria-pressed='true'] { background: var(--tune-panel); color: var(--tune-ink); box-shadow: 0 1px 4px #0001; }
+.parameter-mode-content { display: flex; flex-direction: column; min-height: 0; }
+.parameter-mode-content[hidden] { display: none; }
+.script-workspace { display: flex; flex-direction: column; min-height: 0; }
+.script-workspace > .parameter-panel-layout { max-height: min(65dvh, 680px); }
+.script-editor { gap: 12px; padding-bottom: 8px !important; }
+.script-toolbar { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.script-editor button, .script-actions > button:not(.parameter-dialog-apply) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 5px 0; border: 0; font-size: 11px; color: var(--tune-muted); }
+.script-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.script-options .script-entrypoint { grid-column: 1 / -1; }
+.script-options label { display: grid; gap: 6px; min-width: 0; color: var(--tune-muted); font-size: 11px; }
+.script-editor :is(select, input[type='number']) { min-width: 0; width: 100%; min-height: 38px; padding: 7px 8px; border: 1px solid var(--tune-line); border-radius: 8px; background: var(--tune-well); color: var(--tune-ink); font: inherit; }
+.script-source-label { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 12px; }
+.script-source-label span { margin-left: auto; color: var(--tune-muted); font-size: 10px; }
+.parameter-panel .script-source { width: 100%; min-height: 280px; resize: vertical; margin: 0; padding: 14px; border: 1px solid var(--tune-line); border-left: 3px solid var(--tune-accent); border-radius: 10px; background: var(--tune-well); color: var(--tune-ink); font: 11px/1.8 ui-monospace, 'Cascadia Code', monospace; tab-size: 4; white-space: pre; overflow: auto; }
+.script-code-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 10px; margin-top: -8px; font-size: 10px; color: var(--tune-muted); }
+.script-editor :is(fieldset, legend) { margin: 0; padding: 0; border: 0; font-size: 11px; }
+.script-editor legend { padding: 4px 0 10px; font-weight: 600; }
+.script-parameters { display: grid; gap: 8px; }
+.script-parameters label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.script-parameters label > span { min-width: 0; overflow-wrap: anywhere; }
+.script-parameters small { margin-left: 5px; color: var(--tune-muted); }
+.script-parameters input[type='number'] { width: 105px; flex: none; font-family: ui-monospace, monospace; }
+.script-parameters input[type='checkbox'] { accent-color: var(--tune-accent); width: 20px; height: 20px; }
+.script-dimensions > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.script-dimensions label { display: grid; gap: 6px; color: var(--tune-muted); }
+.script-status { font-size: 11px; line-height: 1.7; color: var(--tune-muted); overflow-wrap: anywhere; white-space: pre-wrap; }
+.script-editor .script-error { padding: 10px 12px; border: 1px solid var(--tune-line); border-left: 3px solid var(--tune-accent); border-radius: 8px; font-size: 11px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.script-log { min-width: 0; font-size: 11px; color: var(--tune-muted); }
+.script-log summary { padding: 10px 0; cursor: pointer; }
+.script-prompt { font-size: 11px; color: var(--tune-muted); }
+.script-prompt textarea { width: 100%; min-height: 180px; margin-top: 8px; padding: 10px; border: 1px solid var(--tune-line); border-radius: 8px; background: var(--tune-well); color: var(--tune-ink); font: 11px/1.7 ui-monospace, monospace; }
+.script-log pre { max-height: 200px; overflow: auto; padding: 10px; border-radius: 8px; background: var(--tune-well); color: var(--tune-ink); font: 10px/1.7 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.parameter-panel :is(.parameter-mode-switch button, .script-editor button, .script-actions button, .script-source, .script-editor select, .script-editor input):focus-visible { outline: 2px solid var(--tune-accent); outline-offset: 3px; }
+.parameter-mode-content > .parameter-panel-layout { flex: 1; }
+@media (min-width: 601px) and (max-width: 900px) { .script-options { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) {
+  .parameter-mode-switch { margin: 0 22px 14px; align-self: stretch; }
+  .parameter-mode-switch button { flex: 1; min-height: 44px; padding: 8px; }
+  .script-workspace > .parameter-panel-layout { max-height: 60dvh; }
+  .script-editor button, .script-editor select, .script-editor input[type='number'] { min-height: 44px; }
+  .parameter-panel .script-source { min-height: 260px; font-size: 12px; }
+  .parameter-dialog .script-actions { grid-template-columns: 1fr; gap: 8px; }
+  .parameter-dialog .script-actions > button { width: 100%; min-height: 44px; }
+}

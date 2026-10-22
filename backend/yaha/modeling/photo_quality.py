@@ -3,9 +3,11 @@
 import math
 
 
-def photo_completion(review):
+def photo_completion(review, fidelity=None):
     if review and review.get("status") == "geometry_verified" and review.get("scope") == "geometry_only":
         return {"status": "completed", "message": review["message"]}
+    if fidelity and fidelity.get("status") == "observed_surface" and fidelity.get("appearance_status") != "accepted":
+        return {"status": "draft", "message": "待改进草稿已保存，真实扫描表面尚未通过照片外观验收。"}
     if not review:
         return {"status": "completed", "message": "作品做好啦！"}
     state = "draft" if review["status"] != "accepted" else review["scope"]

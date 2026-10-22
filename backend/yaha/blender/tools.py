@@ -27,7 +27,7 @@ def segments(radius_mm):
     return math.ceil(count / 4) * 4
 
 
-def mesh_object(vertices, faces, name):
+def mesh_object(vertices, faces, name, *, preserve_winding=False):
     mesh = bpy.data.meshes.new(name)
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
@@ -35,7 +35,8 @@ def mesh_object(vertices, faces, name):
     try:
         bm.from_mesh(mesh)
         bmesh.ops.triangulate(bm, faces=list(bm.faces))
-        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+        if not preserve_winding:
+            bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
         bm.to_mesh(mesh)
     finally:
         bm.free()
@@ -183,7 +184,7 @@ def input_mesh(request):
         obj.scale *= request.get("input_scale", 1)
     else:
         data = json.loads(path.read_text(encoding="utf-8"))
-        obj = mesh_object([[coordinate / 1000 for coordinate in vertex] for vertex in data["vertices"]], data["faces"], "导入模型")
+        obj = mesh_object([[coordinate / 1000 for coordinate in vertex] for vertex in data["vertices"]], data["faces"], "导入模型", preserve_winding=True)
     if request.get("repair"):
         activate(obj)
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
@@ -193,7 +194,8 @@ def input_mesh(request):
             boundary = [edge for edge in bm.edges if edge.is_boundary]
             if boundary:
                 bmesh.ops.holes_fill(bm, edges=boundary, sides=32)
-            bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+            from islands import repair_winding
+            repair_winding(bm)
             bm.to_mesh(obj.data)
         finally:
             bm.free()
@@ -203,6 +205,9 @@ def input_mesh(request):
 def build_scene(request, progress, directory=None):
     bpy.context.scene["yaha_plan"] = json.dumps(request.get("source_plan", request.get("plan", {})), ensure_ascii=False)
     features, body, effects, boolean_effects = {}, None, [], []
+    if request.get("plan", {}).get("generator"):
+        from generators import build_generator
+        body = build_generator(request["plan"]["generator"])
     if request.get("heightmap"):
         from heightmap import build_heightmap
         body = build_heightmap(request)

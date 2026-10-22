@@ -1,6 +1,7 @@
 import { SlidersHorizontal, RotateCcw, Scissors, Blocks, X, Layers } from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
 import { ParameterEditor } from '../modeling/ParameterEditor';
+import { ParameterPanel } from '../modeling/ParameterPanel';
 import type { Spec } from '../../types';
 import { QualityReport } from '../reconstruction/QualityReport';
 import { isPhotoMode } from '../../theme/modes';
@@ -73,6 +74,13 @@ export function AdjustPanel({
     </label>
   );
 
+  if (s.project?.model && (activeStage === 2 || activeStage === 4 || activeStage === null)) {
+    return <aside className="adjust-stack local-parameter-inspector" aria-label="本地参数微调">
+      <div className="adjust-drawer-header"><strong>参数微调</strong>{onClose && <button className="drawer-close-btn" onClick={onClose}><X size={14} />收起</button>}</div>
+      <ParameterPanel project={s.project} />
+    </aside>;
+  }
+
   return (
     <aside className="adjust-stack" aria-label="阶段检视与微调面板">
       {/* 顶部检视栏标题与收起按钮 */}
@@ -142,7 +150,7 @@ export function AdjustPanel({
       )}
 
       {/* 参数调校面板 */}
-      {(activeStage === 2 ||
+      {!s.project?.model && (activeStage === 2 ||
         activeStage === 4 ||
         activeStage === null ||
         !isPhotoMode(s.spec.mode)) && (

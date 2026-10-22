@@ -17,8 +17,10 @@ export function proposalBlockReason(
     const curParams = spec.modeling_plan?.parameters;
     if (canonical(snapshot.modeling_plan?.source_mesh) !== canonical(spec.modeling_plan?.source_mesh))
       return '编辑源网格已改变，请基于当前模型重新确认建议。';
-    // 仅在核心参数化建模参数发生结构性修改时提示，不因添加照片素材或文字润色误杀
-    if (snapParams && curParams && canonical(snapParams) !== canonical(curParams)) {
+    const physicalFields = ['width_mm', 'depth_mm', 'height_mm', 'thickness_mm', 'bottom_mm', 'ear_scale', 'base', 'hole', 'hole_shape', 'relief_kind'] as const;
+    // 实体尺寸、制造选项与方案参数均须匹配，不因补充照片或润色文字阻断建议。
+    if (physicalFields.some((key) => key in snapshot && canonical(snapshot[key]) !== canonical(spec[key])) ||
+        canonical(snapParams) !== canonical(curParams)) {
       return '模型参数已改变，请点击“继续修改”，结合当前参数重新整理建议。';
     }
   } catch {

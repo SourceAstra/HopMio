@@ -12,7 +12,7 @@ export function AiAdjustment() {
   const hasModel = !!modelSpec;
   const active = s.job?.kind === 'adjust' && s.job.project_id === s.project?.id;
   const latest = s.project?.model?.adjustment;
-  const locked = Object.values(modelSpec?.modeling_plan?.parameters || {}).filter((p) => p.locked);
+  const locked = Object.values(modelSpec?.modeling_plan?.parameters || {}).filter((p) => p.locked && p.ui);
 
   return (
     <section className="modeling-plan ai-adjustment">
@@ -20,6 +20,7 @@ export function AiAdjustment() {
         <Sparkles size={17} /> AI 微调
       </h3>
       <p>告诉乌萨奇哪里要改，基于当前造型继续调整。</p>
+      {s.project?.spec.modeling_plan?.generator && <small>局部修改将基于当前网格另存新版本；生成器及其参数保留在原版本中。</small>}
       <form
         onSubmit={async (event) => {
           event.preventDefault();
@@ -69,7 +70,7 @@ export function AiAdjustment() {
       )}
       {locked.length > 0 && (
         <small>
-          已固定：{locked.map((p) => p.label).join('、')}。需要 AI 修改时，请先解除固定。
+          已固定：{locked.map((p) => p.ui!.display_label).join('、')}。需要 AI 修改时，请先解除固定。
         </small>
       )}
       {active && (

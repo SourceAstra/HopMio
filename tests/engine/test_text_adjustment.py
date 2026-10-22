@@ -5,7 +5,7 @@ import pytest
 import trimesh
 from yaha.contracts import DesignSpec, ModelAdjustment, DomainError
 from yaha.modeling.geometry_review import geometry_digest, review_geometry
-from yaha.modeling.design_review import require_adjustment_acceptance
+from yaha.modeling.design_review import adjustment_accepted
 from yaha.modeling.photo_quality import photo_completion
 from yaha.modeling.contracts import GeometryPlan, GeometryStep
 from yaha.modeling.backend import BuildResult
@@ -37,6 +37,12 @@ def test_geometry_comparison_ignores_mesh_face_order():
     assert geometry_digest(mesh) != geometry_digest(moved)
 
 
+def test_unreviewed_observed_surface_is_saved_as_draft():
+    result = photo_completion(None, {"status": "observed_surface", "appearance_status": "unverified"})
+    assert result == {"status": "draft", "message": "待改进草稿已保存，真实扫描表面尚未通过照片外观验收。"}
+    assert photo_completion(None, {"status": "observed_surface", "appearance_status": "accepted"})["status"] == "completed"
+
+
 def test_local_review_cannot_claim_visual_acceptance_or_accept_noop(tmp_path):
     mesh = trimesh.creation.box()
     previous = tmp_path / 'previous.stl'; mesh.export(previous)
@@ -49,7 +55,7 @@ def test_local_review_cannot_claim_visual_acceptance_or_accept_noop(tmp_path):
     review_geometry(service, box_spec(), (built, mesh, measurements), {'model': None}, job_stub())
     report = built.manifest['design_review']
     assert report['status'] == 'geometry_verified' and report['visual_status'] == 'unverified'
-    require_adjustment_acceptance(report)
+    assert adjustment_accepted(report)
     assert photo_completion(report)['status'] == 'completed'
     with pytest.raises(DomainError):
         review_geometry(service, box_spec(), (built, mesh, [{'status': 'fail'}]), {'model': None}, job_stub())

@@ -1,15 +1,19 @@
 // 云端和会话写入均拦截；不修改真实作品，不消耗模型额度。
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { readFile, mkdir } from 'node:fs/promises';
 import { editableProject } from './fixtures.mjs';
+const baseURL = process.env.YAHA_TEST_URL || 'http://127.0.0.1:5173';
 const browser = await chromium.launch({
   headless: true,
   channel: process.env.YAHA_TEST_BROWSER || 'msedge',
 });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1050 } });
-const bootstrap = (
+const bootstrap = process.env.YAHA_TEST_BOOTSTRAP
+  ? JSON.parse(await readFile(process.env.YAHA_TEST_BOOTSTRAP, 'utf8'))
+  : (
   await (
-    await page.request.post('http://127.0.0.1:5173/api/rpc', { data: { method: 'bootstrap' } })
+    await page.request.post(`${baseURL}/api/rpc`, { data: { method: 'bootstrap' } })
   ).json()
 ).result;
 const project = editableProject(bootstrap);
@@ -46,12 +50,19 @@ let store = {
 };
 const ideas = [],
   adjustments = [];
+const pageErrors = [];
+let failNextSave = false;
+page.on('pageerror', (error) => pageErrors.push(error.message));
 await page.route('**/api/rpc', async (route) => {
   const { method, params = {} } = route.request().postDataJSON();
   const result = async (value) => route.fulfill({ json: { result: value } });
   if (method === 'bootstrap') return result(bootstrap);
   if (method === 'conversation.get') return result(store);
   if (method === 'conversation.save') {
+    if (failNextSave) {
+      failNextSave = false;
+      return route.fulfill({ json: { error: { code: 'CONVERSATION_CONFLICT', message: '模拟会话同步冲突' } } });
+    }
     assert.equal(params.expected_version, store.version);
     store = { version: store.version + 1, messages: params.messages };
     return result({ version: store.version });
@@ -104,8 +115,8 @@ await page.route('**/api/rpc', async (route) => {
   return route.continue();
 });
 try {
-  await page.goto('http://127.0.0.1:5173/');
-  await page.getByRole('button', { name: /造物桌面/ }).click();
+  await page.goto(baseURL);
+  await page.getByTitle('呼出右侧 3D 模型实物视口').click();
   const input = page.getByRole('textbox', { name: '造物对话', exact: true });
   assert.equal(await page.locator('.dock-mode-selector').count(), 0);
   await input.fill('这一面位置正中间');
@@ -129,8 +140,17 @@ try {
   await page.waitForFunction(() => !document.querySelector('.dock-textarea')?.disabled);
   assert.equal(adjustments.length, 2);
   assert.equal(adjustments[0].adjustment.instruction, adjustments[1].adjustment.instruction);
+  failNextSave = true;
+  await input.fill('你建议什么材料');
+  await input.press('Enter');
+  await page.getByText('模拟会话同步冲突', { exact: false }).waitFor();
+  assert(await retry.isDisabled(), '同步失败时应保护会话');
+  await page.getByRole('button', { name: '重新同步会话', exact: true }).click();
+  await retry.click();
+  await page.waitForFunction(() => !document.querySelector('.dock-textarea')?.disabled);
+  assert.equal(adjustments.length, 3, '重新同步后确认按钮应恢复提交');
   await page.reload();
-  await page.getByRole('button', { name: /造物桌面/ }).click();
+  await page.getByTitle('呼出右侧 3D 模型实物视口').click();
   await page.getByText('Usagi居中并放大字体', { exact: true }).waitFor();
   assert(store.messages.some((m) => m.content === '再放大字体'));
   const restoredInput = page.getByRole('textbox', { name: '造物对话', exact: true });
@@ -141,8 +161,16 @@ try {
   await restoredInput.press('Enter');
   await page.getByRole('button', { name: '立即开始造物', exact: true }).waitFor();
   assert.equal(await page.locator('.dock-mode-selector').count(), 0);
+  assert.deepEqual(pageErrors, [], '页面不应出现未捕获异常');
+  await mkdir('.artifacts/verification', { recursive: true });
   await page.screenshot({ path: '.artifacts/verification/unified-dialogue.png' });
-  console.log('统一对话：文字模型连续调整、咨询、重新设计、旧方案替代、失败重试及刷新恢复通过。');
+  console.log('统一对话：连续调整、确认提交、失败重试、同步冲突恢复、刷新恢复、咨询与重新设计通过；3 次 model.adjust 提交，0 个页面异常。');
+} catch (error) {
+  console.error('页面异常：', pageErrors);
+  console.error((await page.locator('body').innerText()).slice(-8000));
+  await mkdir('.artifacts/verification', { recursive: true });
+  await page.screenshot({ path: '.artifacts/verification/dialogue-failure.png' });
+  throw error;
 } finally {
   await browser.close();
 }

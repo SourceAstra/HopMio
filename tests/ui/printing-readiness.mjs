@@ -13,6 +13,14 @@ const project = {
 };
 assert.equal(dataSnapshot({ a: 1, b: { c: 2 } }), dataSnapshot({ b: { c: 2 }, a: 1 }));
 assert(printingReadiness(project, profile, false, false, false).canPrepare);
+const unreviewedScan = {
+  ...project,
+  model: { photo_fidelity: { status: 'observed_surface', appearance_status: 'unverified' } },
+};
+assert.match(
+  printingReadiness(unreviewedScan, profile, false, false, false).prepareBlock,
+  /待改进草稿/,
+);
 assert.match(printingReadiness(project, profile, true, false, false).prepareBlock, /未保存/);
 assert.match(
   printingReadiness({ ...project, validation: null }, profile, false, false, false).prepareBlock,

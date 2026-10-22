@@ -57,6 +57,8 @@ def adjust_plan(service, spec, adjustment, project, job):
         job.record(ai_diagnostics=value, message=stages.get(phase, "AI 正在理解细节调整要求"))
 
     instruction = adjustment.instruction
+    if any(k in instruction for k in ("圆角", "流线", "生硬", "倒角", "弧度", "平滑", "造型")):
+        instruction += "\n【造型优化硬性要求】：用户提出流线/圆角/形态优化。若现有部件原语生硬（如独立椭球、直圆柱拼插），必须升级为带渐变截面与平滑路径的 sweep 或放样 loft，或显著调整截面控制点与圆角；严禁仅对内部微小浮点数做 0.01mm 级的无效改动！"
     if adjustment.location_point_mm:
         instruction += "\n用户在当前制造模型上点选的位置（X/Y/Z，毫米，Z向上，底面Z=0）为：" + str(list(adjustment.location_point_mm)) + "。结合前后视图与原方案坐标定位局部工具，不能把点选标记作为实体。"
     if adjustment.target_part_id:
@@ -71,5 +73,5 @@ def adjust_plan(service, spec, adjustment, project, job):
     changed_parts = [step["name"] for step in after["steps"] if step != old_parts.get(step["id"])]
     new_ids = {step.id for step in plan.steps}
     changed_parts += [step.name for step in previous.steps if step.id not in new_ids]
-    apply_plan(service, spec, plan, job)
+    apply_plan(service, spec, plan, job, allow_resize=True)
     return adjustment.model_dump() | {"changes": changes, "parts": changed_parts, "scope_validation": "passed" if adjustment.target_part_id else "not_requested"}

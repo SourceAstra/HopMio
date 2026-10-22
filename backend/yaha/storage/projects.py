@@ -21,6 +21,7 @@ class Projects:
             "spec": spec,
             "revision_id": None,
             "revision_count": 0,
+            "revision_number": 0,
             "created_at": now(),
             "updated_at": now(),
             "exhibited": False,
@@ -38,6 +39,13 @@ class Projects:
         if not project:
             raise DomainError("这个项目暂时找不到，请回作品柜看看。")
         project["spec"] = DesignSpec.model_validate(project["spec"]).model_dump()
+        # 序号与历史列表一致；版本总数不能代表当前选中的版本。
+        with self.db.lock:
+            revisions = self.db.connection.execute(
+                "SELECT id FROM revisions WHERE project_id=? ORDER BY json_extract(data, '$.created_at') DESC, rowid",
+                (identifier,),
+            ).fetchall()
+        project["revision_number"] = next((len(revisions) - index for index, row in enumerate(revisions) if row["id"] == project["revision_id"]), 0)
         return project
 
     def list(self):
@@ -79,7 +87,7 @@ class Projects:
                 "UPDATE projects SET data=? WHERE id=?",
                 (json.dumps(project, ensure_ascii=False), identifier),
             )
-        return project
+        return self.get(identifier)
 
     def restore(self, identifier, revision_id):
         rev = self.db.get("revisions", revision_id)
@@ -88,7 +96,7 @@ class Projects:
         spec = DesignSpec.model_validate(rev["spec"]).model_dump()
         return self.revision(identifier, spec, rev["model"], "回到之前的版本")
 
-    def select_revision(self, identifier, revision_id):
+    def select_revision(self, identifier, revision_id, *, promote=False):
         project = self.get(identifier)
         rev = self.db.get("revisions", revision_id)
         if not rev or rev["project_id"] != identifier:
@@ -104,8 +112,12 @@ class Projects:
             printed=False,
             slicing=None,
         )
-        self.db.put("projects", identifier, project)
-        return project
+        with self.db.transaction() as conn:
+            conn.execute("UPDATE projects SET data=? WHERE id=?", (json.dumps(project, ensure_ascii=False), identifier))
+            if promote:
+                rev.update(status="saved", reason="Blender 脚本")
+                conn.execute("UPDATE revisions SET data=? WHERE id=?", (json.dumps(rev, ensure_ascii=False), revision_id))
+        return self.get(identifier)
 
     def history(self, identifier):
         self.get(identifier)
@@ -121,6 +133,7 @@ class Projects:
             conn.execute("DELETE FROM revisions WHERE project_id=?", (identifier,))
             conn.execute("DELETE FROM projects WHERE id=?", (identifier,))
             conn.execute("DELETE FROM settings WHERE key=?", ("project_conversation:" + identifier,))
+            conn.execute("DELETE FROM settings WHERE key=?", ("project_script:" + identifier,))
         return {"id": identifier, "deleted": True}
 
     def delete_revision(self, identifier: str, revision_id: str):

@@ -6,7 +6,7 @@ PHOTO_MODES = (Mode.IMAGE, Mode.MULTIVIEW)
 
 
 def select_photo_route(service, spec, automatic):
-    if not automatic or spec.mode not in PHOTO_MODES or (spec.modeling_plan and spec.modeling_plan.source_mesh):
+    if not automatic or spec.mode not in PHOTO_MODES or (spec.modeling_plan and (spec.modeling_plan.source_mesh or spec.modeling_plan.generator)):
         return None
     requested = spec.provider
     scan = service.modelers["reconstruction"].status()
@@ -45,13 +45,14 @@ def build_photo_result(spec, route, job, operation):
 def photo_fidelity(spec, manifest, route):
     scan, outline = manifest.get("reconstruction"), manifest.get("outline_fit", {})
     review = manifest.get("photo_review", {})
+    appearance_accepted = review.get("status") == "accepted" and review.get("scope") == "photo_reference"
     warnings = list(scan.get("warnings", [])) if scan else ["这是照片参考造型；未观测的深度、背面与细节包含设计推测。"]
     if route and any(item["status"] == "failed" for item in route["attempts"]):
         warnings.append("本次真实表面恢复未完成，已保留轮廓草稿；该草稿不是实物扫描。")
-    if not scan and review.get("status") != "accepted":
-        warnings.append(review.get("message") or "该历史版本没有可追溯的照片外观验收，不能确认造型准确。")
+    if not scan and not appearance_accepted:
+        warnings.append("造型意图审阅不代表照片外观验收，尚不能确认还原准确。" if review.get("scope") == "design_intent" else review.get("message") or "该版本没有可追溯的照片外观验收，不能确认造型准确。")
     return {"schema_version": "yaha.photo-fidelity/v1", "basis": "calibrated_views" if scan else "estimated_views" if outline.get("used_views") else "photo_reference",
-            "appearance_status": "accepted" if review.get("status") == "accepted" else "unverified", "review_scope": review.get("scope"),
+            "appearance_status": "accepted" if appearance_accepted else "unverified", "review_scope": review.get("scope"),
             "status": "observed_surface" if scan else "outline_draft", "input_views": len(spec.asset_ids),
             "used_views": scan["registered_views"] if scan else outline.get("used_views", 0),
             "unregistered_asset_ids": scan.get("unregistered_asset_ids", []) if scan else [],

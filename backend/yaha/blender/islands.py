@@ -2,6 +2,48 @@
 
 import bmesh
 import math
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
+
+
+def repair_winding(mesh):
+    """只重排朝向不一致的连通壳，保留有效内腔的负向边界。"""
+    mesh.normal_update()
+    remaining = {face for edge in mesh.edges if edge.is_manifold and not edge.is_contiguous for face in edge.link_faces}
+    while remaining:
+        first = remaining.pop()
+        faces, pending = {first}, [first]
+        while pending:
+            for edge in pending.pop().edges:
+                for face in edge.link_faces:
+                    if face not in faces:
+                        faces.add(face)
+                        pending.append(face)
+        remaining.difference_update(faces)
+        volume = math.fsum(face.calc_center_median().dot(face.normal) * face.calc_area() / 3 for face in faces)
+        bmesh.ops.recalc_face_normals(mesh, faces=list(faces))
+        if volume < 0:
+            bmesh.ops.reverse_faces(mesh, faces=list(faces))
+    if mesh.calc_volume(signed=True) < 0:
+        bmesh.ops.reverse_faces(mesh, faces=list(mesh.faces))
+
+
+def encloses(vertices, point):
+    """封闭外壳的射线奇偶检查；用于将内腔边界归属到其实体。"""
+    points = list(vertices)
+    indices = {vertex: index for index, vertex in enumerate(points)}
+    faces = {face for vertex in points for face in vertex.link_faces}
+    tree = BVHTree.FromPolygons([vertex.co for vertex in points], [[indices[v] for v in face.verts] for face in faces])
+    direction = Vector((1, 0.37139, 0.52973)).normalized()
+    origin, count = point.copy(), 0
+    epsilon = max(max(vertex.co.length for vertex in points) * 1e-6, 1e-10)
+    for _ in range(len(faces) + 1):
+        location, _, _, _ = tree.ray_cast(origin, direction)
+        if location is None:
+            return count % 2 == 1
+        count += 1
+        origin = location + direction * epsilon
+    raise ValueError("内腔归属射线未收敛，拒绝清理。")
 
 
 def remove_flat_islands(obj):
@@ -69,7 +111,7 @@ def weld_surface(obj, distance):
         bmesh.ops.remove_doubles(mesh, verts=list(mesh.verts), dist=distance)
         boundary = [edge for edge in mesh.edges if edge.is_boundary]
         filled = bmesh.ops.holes_fill(mesh, edges=boundary, sides=64)
-        bmesh.ops.recalc_face_normals(mesh, faces=list(mesh.faces))
+        repair_winding(mesh)
         remaining = sum(edge.is_boundary for edge in mesh.edges)
         if remaining:
             raise ValueError(f"制造表面仍有{remaining}条开放边，超出小孔修补能力；请补拍或编辑源表面。")
@@ -85,7 +127,6 @@ def remove_noise(obj, max_removed_ratio):
     try:
         mesh.from_mesh(obj.data)
         bmesh.ops.triangulate(mesh, faces=list(mesh.faces))
-        bmesh.ops.recalc_face_normals(mesh, faces=list(mesh.faces))
         remaining, groups = set(mesh.verts), []
         while remaining:
             first = remaining.pop()
@@ -98,8 +139,20 @@ def remove_noise(obj, max_removed_ratio):
                             vertices.add(vertex)
                             pending.append(vertex)
             faces = {face for vertex in vertices for face in vertex.link_faces}
-            volume = abs(sum(face.verts[0].co.dot(face.verts[1].co.cross(face.verts[2].co)) / 6 for face in faces))
+            origin = first.co.copy()
+            volume = math.fsum((face.verts[0].co - origin).dot((face.verts[1].co - origin).cross(face.verts[2].co - origin)) / 6 for face in faces)
             groups.append((vertices, volume))
+        cavities = [group for group in groups if group[1] < 0]
+        groups = [group for group in groups if group[1] > 0]
+        owners = []
+        for vertices, volume in cavities:
+            candidates = [index for index, group in enumerate(groups) if group[1] > -volume and encloses(group[0], next(iter(vertices)).co)]
+            if not candidates:
+                raise ValueError("内腔边界没有可确认的外壳，拒绝改变实体拓扑。")
+            owners.append((min(candidates, key=lambda index: groups[index][1]), vertices, volume))
+        for index, vertices, volume in owners:
+            outer, total = groups[index]
+            groups[index] = (outer | vertices, total + volume)
         if not groups:
             raise ValueError("制造副本没有可用实体。")
         largest = max(groups, key=lambda group: group[1])
@@ -110,6 +163,6 @@ def remove_noise(obj, max_removed_ratio):
         removed = [vertex for vertices, _ in groups if vertices is not largest[0] for vertex in vertices]
         bmesh.ops.delete(mesh, geom=removed, context="VERTS")
         mesh.to_mesh(obj.data)
-        return {"removed_components": len(groups) - 1, "removed_volume_ratio": ratio, "max_removed_volume_ratio": max_removed_ratio}
+        return {"removed_components": len(groups) - 1, "removed_volume_ratio": ratio, "max_removed_volume_ratio": max_removed_ratio, "preserved_cavity_shells": sum(1 for index, _, _ in owners if groups[index][0] is largest[0])}
     finally:
         mesh.free()

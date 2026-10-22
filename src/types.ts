@@ -4,14 +4,65 @@ export type Scalar =
   | { parameter: string }
   | { op: 'add' | 'subtract' | 'multiply' | 'divide'; args: [Scalar, Scalar] };
 export interface Parameter {
-  value: number;
+  value: number | boolean;
   label: string;
   unit: 'mm' | 'deg' | 'ratio';
   locked?: boolean;
+  ui?: {
+    display_label: string;
+    control: 'slider' | 'switch';
+    min?: number | null;
+    max?: number | null;
+    step?: number | null;
+    description?: string;
+  } | null;
+}
+export interface ParameterTarget {
+  schema_version: 1;
+  id: string;
+  base_revision_id: string;
+}
+export interface ParameterDescription extends ParameterTarget {
+  parameters: Record<string, ParameterCapability>;
+}
+export type ParameterCapability = {
+  display_label: string;
+  unit: Parameter['unit'];
+  description: string;
+} & ({ control: 'slider'; value: number; min: number; max: number; step: number }
+  | { control: 'switch'; value: boolean });
+export interface ParameterPatch extends ParameterTarget {
+  parameters: Record<string, number | boolean>;
+}
+export interface GeneratorReference { id: string; version: number }
+export interface GeneratorDefinition extends GeneratorReference { title: string; description: string }
+export interface GeneratorRequest extends ParameterTarget { generator: GeneratorReference }
+export interface ScriptDocument {
+  schema_version: 1;
+  source: string;
+  operation: 'replace' | 'edit';
+  coordinate_unit: 'mm' | 'm';
+  entrypoint: 'script' | 'build';
+  parameters: Record<string, number | boolean>;
+  expected_size_mm: [number, number, number] | null;
+}
+export interface ScriptRequest extends ParameterTarget { document: ScriptDocument }
+export interface ScriptDescription {
+  document: ScriptDocument | null;
+  candidate: Revision | null;
+  candidate_document: ScriptDocument | null;
+  execution: { available: boolean; message: string };
+  blender_version: string;
+  source_model_id: string | null;
+}
+export interface ScriptInspection {
+  parameters: ScriptDocument['parameters'];
+  controls: Record<string, { value: number | boolean; display_label: string; unit: string; min: number; max: number; step: number }>;
 }
 export interface GeometryStep {
   id: string;
   name: string;
+  enabled?: boolean | { parameter: string };
   operation: 'add' | 'subtract' | 'intersect';
   shape:
     | 'box'
@@ -63,7 +114,8 @@ export interface Measurement {
   status: 'pass' | 'fail' | 'unverified';
 }
 export interface GeometryPlan {
-  schema_version: 2 | 3 | 4 | 5 | 6 | 7;
+  schema_version: 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+  generator?: GeneratorReference | null;
   source_mesh?: { asset_id: string; sha256: string; scale: Scalar } | null;
   source_options?: { base: boolean; hole: boolean; hole_shape: 'round' | 'heart' } | null;
   title: string;
@@ -71,6 +123,7 @@ export interface GeometryPlan {
   source_asset_ids: string[];
   model_label: string;
   parameters: Record<string, Parameter>;
+  geometry_bindings?: Record<string, Scalar>;
   steps: GeometryStep[];
   surface?: { height_mm: Scalar; voxel_mm: Scalar; smooth_iterations: number } | null;
   reference_views?: {
@@ -154,6 +207,7 @@ export interface Spec {
   assumptions: string[];
 }
 export interface Model {
+  script_document_id?: string;
   stl_id: string;
   glb_id: string;
   blend_id?: string;
@@ -237,6 +291,7 @@ export interface Project {
   model: Model | null;
   revision_id: string | null;
   revision_count: number;
+  revision_number?: number;
   validation: Report | null;
   slicing?: SliceReport | null;
   story: string;
@@ -263,6 +318,7 @@ export interface ModelAdjustment {
   location_point_mm?: [number, number, number];
 }
 export interface Job {
+  preview_only?: boolean;
   error_code?: string;
   id: string;
   project_id: string;
@@ -277,6 +333,7 @@ export interface Job {
   progress: number;
   message: string;
   diagnostics?: { exit_code: number | null; log: string };
+  script_diagnostics?: { exit_code: number | null; log: string };
   reconstruction_diagnostics?: { stage: string; exit_code: number | null; log: string };
   slicing_diagnostics?: { stage: string; exit_code: number | null; log: string };
   ai_diagnostics?: {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Sparkles, Check, Pencil, Clock, User, Wand2, Box, Sliders } from 'lucide-react';
+import { Sparkles, Check, Pencil, Clock, User, Wand2, Box } from 'lucide-react';
 import { Usagi } from '../../../components/Usagi';
 import { assetUrl } from '../../../api/client';
 import type { ChatMessage, ProposalData, OrganizeData } from './types';
@@ -10,7 +10,6 @@ interface ChatFeedProps {
   onQuoteProposal: (proposal: ProposalData) => void;
   onSelectQuickPrompt?: (prompt: string) => void;
   onConfirmOrganize?: (organize: OrganizeData) => void;
-  onOpenRibbon?: () => void;
   isBusy: boolean;
   busyMessage?: string;
   reviewAvailable?: boolean;
@@ -23,7 +22,6 @@ export function ChatFeed({
   onQuoteProposal,
   onSelectQuickPrompt,
   onConfirmOrganize,
-  onOpenRibbon,
   isBusy,
   busyMessage,
   reviewAvailable = true,
@@ -324,16 +322,6 @@ export function ChatFeed({
                 )}
 
                 <div className="organize-actions">
-                  {onOpenRibbon && (
-                    <button
-                      type="button"
-                      className="org-btn-edit"
-                      onClick={onOpenRibbon}
-                      title="展开物理定标栏微调长宽高与细节"
-                    >
-                      <Sliders size={12} /> 微调参数
-                    </button>
-                  )}
                   {onConfirmOrganize && (
                     <button
                       type="button"

@@ -58,6 +58,20 @@ def test_description_cannot_replace_actual_lettering():
         validate_intent(spec, spec.modeling_plan, compile_plan(spec.modeling_plan))
 
 
+@pytest.mark.parametrize('error,tolerance,accepted', [(0.075,0.1,False),(0.04,0.1,True),(0.02,0.01,False)])
+def test_actual_dimensions_enforce_design_precision(tmp_path,error,tolerance,accepted):
+    path=tmp_path/'precision.stl'
+    trimesh.creation.box(extents=[10,10,10+error]).export(path)
+    rules=[{'feature':'model.height','expected_mm':10,'max_error_mm':tolerance}]
+    if not accepted:
+        with pytest.raises(DomainError) as failure:
+            verify(path,{},rules)
+        assert failure.value.code=='BLENDER_DIMENSION'
+    else:
+        _,report=verify(path,{},rules)
+        assert report[0]['status']=='pass' and report[0]['max_error_mm']==0.05
+
+
 def test_world_axis_cutter_dimensions_do_not_count_as_round():
     spec = keychain()
     spec.modeling_plan.steps[1].size_mm = (4,9,4)
@@ -81,10 +95,129 @@ def test_corner_radius_is_independent_of_thin_plate_thickness():
     validate_intent(spec, spec.modeling_plan, compiled)
 
 
+def test_planner_repair_receives_multiple_coordinate_errors():
+    from yaha.modeling.planner import CloudModelingPlanner
+    spec = keychain()
+    valid = spec.modeling_plan.model_dump()
+    invalid = spec.modeling_plan.model_dump()
+    invalid['steps'][0]['coordinate_origin'] = 'local_origin'
+    invalid['steps'][1]['coordinate_origin'] = 'local_origin'
+    prompts = []
+    def complete(system, prompt, images, observer=None):
+        prompts.append(prompt)
+        return invalid if len(prompts) == 1 else valid
+    plan = CloudModelingPlanner(SimpleNamespace(complete=complete)).design(spec, [])
+    assert len(prompts) == 2
+    assert 'steps.0' in prompts[1] and 'steps.1' in prompts[1]
+    assert [step.coordinate_origin for step in plan.steps] == ['bounds_center'] * 3
+    assert invalid['steps'][0]['coordinate_origin'] == 'local_origin'
+
+
+def test_generation_keeps_confirmed_height_and_adjustment_can_resize():
+    from yaha.modeling.planner import apply_plan
+    spec=keychain()
+    changed=spec.modeling_plan.model_copy(deep=True)
+    next(rule for rule in changed.constraints if rule.feature=='model.height').expected_mm=80
+    service=SimpleNamespace(settings=SimpleNamespace(values=lambda:{'chat_model':'test'}))
+    job=SimpleNamespace(check=lambda:None,record=lambda **kwargs:None)
+    apply_plan(service,spec,changed,job)
+    assert spec.height_mm==50
+    request,_,_=prepare(spec,None)
+    assert next(rule for rule in request['plan']['constraints'] if rule['feature']=='model.height')['expected_mm']==50
+    apply_plan(service,spec,changed,job,allow_resize=True)
+    assert spec.height_mm==80
+
+
+def test_text_surface_cannot_drop_confirmed_width_and_depth(tmp_path):
+    spec = DesignSpec(provider='parametric', prompt='趴睡摆件，高50毫米、宽80毫米、深50毫米', width_mm=80, depth_mm=50, height_mm=50)
+    spec.modeling_plan = GeometryPlan.model_validate({
+        'title':'曲面尺寸验收','source_prompt':spec.prompt,
+        'parameters':{'height':{'value':50,'label':'高度'}},
+        'steps':[{'id':'body','name':'主体','shape':'ellipsoid','coordinate_origin':'bounds_center','size_mm':[80,50,50]}],
+        'surface':{'height_mm':50,'voxel_mm':0.25,'smooth_iterations':8},
+        'constraints':[{'feature':'model.height','expected_mm':50}],
+    })
+    request,_,_=prepare(spec,None)
+    rules=request['plan']['constraints']
+    assert {rule['feature']:rule['expected_mm'] for rule in rules}=={'model.width':80,'model.depth':50,'model.height':50}
+    path=tmp_path/'wrong-proportions.stl'
+    trimesh.creation.box(extents=[98.13,63.61,50]).export(path)
+    with pytest.raises(DomainError,match='model.width'):
+        verify(path,{},rules)
+    spec.modeling_plan.surface=None
+    solid_request,_,_=prepare(spec,None)
+    assert {rule['feature']:rule['expected_mm'] for rule in solid_request['plan']['constraints']}=={'model.width':80,'model.depth':50,'model.height':50}
+    spec.mode='image';spec.asset_ids=['photo']
+    spec.modeling_plan.source_asset_ids=['photo']
+    photo_request,_,_=prepare(spec,None)
+    assert [rule['feature'] for rule in photo_request['plan']['constraints']]==['model.height']
+
+
+@pytest.mark.parametrize('island_size,accepted', [(0.001,True),(0.005,False)])
+def test_final_export_removes_bounded_noise_and_preserves_large_parts(tmp_path,island_size,accepted):
+    import subprocess
+    from pathlib import Path
+    from yaha.modeling.runtime import runtime
+    helper=Path(__file__).resolve().parents[1]/'blender/export_cleanup.py'
+    subprocess.run([runtime()['executable'],'--background','--factory-startup','--python',str(helper),'--',str(tmp_path),str(island_size)],capture_output=True,text=True,timeout=60,check=True)
+    result=json.loads((tmp_path/'cleanup-result.json').read_text())
+    if accepted:
+        mesh=load_mesh(tmp_path/'model.stl')
+        assert len(mesh.split(only_watertight=False))==1
+        assert np.allclose(mesh.extents,[10,10,10],atol=0.001)
+        assert mesh.volume==pytest.approx(1000,abs=0.01)
+        assert result['removed_components']==1 and result['removed_volume_ratio']<0.02
+    else:
+        assert '超过' in result['error']
+        assert not (tmp_path/'model.stl').exists()
+
+
+def test_closed_cavity_orientation_survives_manufacturing_export(tmp_path):
+    plan=GeometryPlan.model_validate({'title':'封闭内腔','parameters':{'outer':{'value':20,'label':'外边长'}},'steps':[
+        {'id':'body','name':'外壳','shape':'box','coordinate_origin':'bounds_center','size_mm':[20,20,20]},
+        {'id':'void','name':'内腔','shape':'box','coordinate_origin':'bounds_center','size_mm':[10,10,10],'operation':'subtract'},
+    ]})
+    mesh=build_mesh(plan,tmp_path)
+    assert mesh.is_watertight and mesh.volume==pytest.approx(7000,abs=0.01)
+    assert sorted(part.volume for part in mesh.split(only_watertight=False))==pytest.approx([-1000,8000],abs=0.01)
+    glb=load_mesh(tmp_path/'manufacturing.glb')
+    assert glb.volume*1e9==pytest.approx(7000,abs=0.01)
+
+
+def test_noise_cleanup_preserves_cavity_boundaries(tmp_path):
+    import subprocess
+    from pathlib import Path
+    from yaha.modeling.runtime import runtime
+    helper=Path(__file__).resolve().parents[1]/'blender/export_cleanup.py'
+    subprocess.run([runtime()['executable'],'--background','--factory-startup','--python',str(helper),'--',str(tmp_path),'0.001','--cavity'],capture_output=True,text=True,timeout=60,check=True)
+    mesh=load_mesh(tmp_path/'model.stl')
+    result=json.loads((tmp_path/'cleanup-result.json').read_text())
+    assert mesh.volume==pytest.approx(875,abs=0.01)
+    assert sorted(part.volume for part in mesh.split(only_watertight=False))==pytest.approx([-125,1000],abs=0.01)
+    assert result['removed_components']==1 and result['preserved_cavity_shells']==1
+
+
+@pytest.mark.parametrize('repair,orientation',[(False,'valid'),(True,'valid'),(True,'inverted'),(True,'one_face')])
+def test_import_and_repair_preserve_valid_closed_cavities(tmp_path,repair,orientation):
+    outer=trimesh.creation.box(extents=[20,20,20])
+    inner=trimesh.creation.box(extents=[10,10,10]);inner.invert()
+    original=trimesh.util.concatenate([outer,inner])
+    if orientation=='inverted':
+        original.invert()
+    elif orientation=='one_face':
+        original.faces[0]=original.faces[0][::-1]
+    content=json.dumps({'vertices':original.vertices.tolist(),'faces':original.faces.tolist()}).encode()
+    job=SimpleNamespace(id='cavity-import-'+uuid.uuid4().hex,check=lambda:None,record=lambda **kwargs:None,progress=lambda *args:None)
+    built=BlenderBackend().build({'plan':{'steps':[],'constraints':[]},'repair':repair},{'input.json':content},job)
+    path=tmp_path/'imported.stl';path.write_bytes(built.files['stl'])
+    actual=load_mesh(path)
+    assert actual.volume==pytest.approx(7000,abs=0.01)
+
+
 def test_photo_auto_requires_observations_and_never_falls_back():
     scan = SimpleNamespace(status=lambda: {'available': True, 'min_photos':3, 'max_photos':96})
     service = SimpleNamespace(modelers={'reconstruction':scan})
-    spec = DesignSpec(mode='image', provider='parametric', asset_ids=['one'])
+    spec = DesignSpec(mode='image', provider='parametric', photo_policy='surface', asset_ids=['one'])
     with pytest.raises(DomainError, match='深度与背面'):
         select_photo_route(service, spec, True)
     spec.asset_ids = ['one','two','three']
@@ -109,6 +242,22 @@ def test_preservation_gate_only_applies_to_actual_adjustments(instruction, expec
     job=SimpleNamespace(check=lambda:None,record=lambda **kwargs:None,progress=lambda *args:None)
     _,result=review_design(service,keychain(),(built,None,None),{'model':None},job,adjustment={'instruction':instruction} if instruction else None)
     assert result[0].manifest['design_review']['status']==expected
+
+
+def test_design_review_receives_actual_cavity_and_boolean_evidence():
+    geometry={'components':1,'cavity_shells':1,'cavities':[{'bounds_mm':[[-5,-5,5],[5,5,15]],'signed_volume_mm3':-1000}]}
+    effects=[{'id':'engraving','operation':'subtract','volume_change_mm3':1000}]
+    def assess(spec,preview,observer,**kwargs):
+        assert kwargs['feedback']['geometry']==geometry
+        assert kwargs['feedback']['boolean_effects']==effects
+        findings={name:{'status':'pass','observation':'无需前后对照，本项不适用。'} for name in ('identity','features','lettering','adjustment','preservation')}
+        findings['features']={'status':'unverified','observation':'实际凹刻为密闭内腔，未见表面开口，不能确认可见细节。'}
+        return DesignAssessment.model_validate(findings)
+    service=SimpleNamespace(design_assessor=SimpleNamespace(assess=assess),reviewer=None)
+    built=BuildResult({'stl':b'actual-cavity','comparison':b'actual-preview'},{'geometry_check':geometry,'boolean_effects':effects})
+    job=SimpleNamespace(check=lambda:None,record=lambda **kwargs:None,progress=lambda *args:None)
+    _,result=review_design(service,keychain(),(built,None,None),{'model':None},job)
+    assert result[0].manifest['design_review']['status']=='draft_retained'
 
 
 def test_empty_workspace_welcome_uses_trusted_mesh_and_real_glb(tmp_path):
@@ -151,8 +300,8 @@ def test_real_blender_name_plate_hole_and_shared_exports(tmp_path):
     radial = hits(mesh, np.array([0.,0.,44.]), np.array([1.,0.,0.]))
     assert radial[0] == pytest.approx(2, abs=0.01)
     assert 'comparison' in built.files and 'manufacturing_glb' in built.files
-    assert Image.open(io.BytesIO(built.files['comparison'])).size == (1536,1024)
-    assert [view['position'] for view in built.manifest['review_views']] == ['front','right','back','left','front-right','back-left']
+    assert Image.open(io.BytesIO(built.files['comparison'])).size == (2048,1024)
+    assert [view['position'] for view in built.manifest['review_views']] == ['front','right','back','left','front-right','back-left','top','bottom']
     service=Service(tmp_path/'roundtrip')
     try:
         stored={role:service.assets.write(content,built.manifest['outputs'][role]['extension'],role,'model',units=built.manifest['units'][role]) for role,content in built.files.items()}
@@ -198,6 +347,8 @@ def build_mesh(plan, tmp_path):
         pytest.skip(backend.status()['message'])
     job = SimpleNamespace(id='quality-'+uuid.uuid4().hex[:12], check=lambda:None, record=lambda **kwargs:None, progress=lambda *args:None)
     built = backend.build({'plan':compile_plan(plan)}, {}, job)
+    if 'manufacturing_glb' in built.files:
+        (tmp_path/'manufacturing.glb').write_bytes(built.files['manufacturing_glb'])
     path = tmp_path / 'actual.stl'
     path.write_bytes(built.files['stl'])
     mesh, _ = verify(path, built.manifest, [])
@@ -252,7 +403,7 @@ def test_targeted_adjustment_rejects_unbound_new_geometry():
     previous=keychain().modeling_plan
     changed=previous.model_copy(deep=True)
     changed.steps.append(previous.steps[1].model_copy(update={'id':'new_hole','center_mm':(0,0,15)}))
-    with pytest.raises(DomainError,match='之外'):
+    with pytest.raises(DomainError,match='新增工具须绑定'):
         validate_scope(previous,changed,'body')
     changed.steps[-1].relative_to='body'
     validate_scope(previous,changed,'body')
@@ -272,6 +423,17 @@ def test_round_sweep_cap_respects_surface_error_budget(tmp_path):
         distance=hits(mesh,np.array([0.,17.,0.]),direction)[0]
         errors.append(abs(15-distance))
     assert max(errors) <= 0.025, f'真实端帽曲面误差 {max(errors):.5f} mm 超过预算'
+
+
+def test_sweep_does_not_overshoot_flat_path_extrema(tmp_path):
+    plan=GeometryPlan.model_validate({'title':'受限扫掠插值','parameters':{'diameter':{'value':2,'label':'直径'}},'steps':[
+        {'id':'body','name':'平顶过渡扫掠','shape':'sweep','coordinate_origin':'local_origin','cap':'flat',
+         'path':[{'position_mm':point,'width_mm':2,'depth_mm':2} for point in ([0,0,0],[10,0,1],[20,0,1],[30,0,0])]},
+    ]})
+    mesh=build_mesh(plan,tmp_path)
+    assert mesh.is_watertight
+    assert mesh.bounds[1,2]<=2.005
+    assert mesh.bounds[0,2]>=-1.005
 
 
 def test_nontext_carving_outside_curved_surface_cannot_succeed(tmp_path):

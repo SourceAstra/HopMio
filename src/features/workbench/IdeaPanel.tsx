@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useTransition, useMemo } from 'react';
-import { Sparkles, Sliders, Trash2 } from 'lucide-react';
+import { Sparkles, Trash2 } from 'lucide-react';
 import { useStudio } from '../../state/StudioContext';
 import { Usagi } from '../../components/Usagi';
 import { call, fileBase64 } from '../../api/client';
@@ -41,7 +41,7 @@ export function IdeaPanel({
   const s = useStudio();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 物理定标抽屉折叠展开状态：默认紧凑收起以最大化对话历史空间，点击随时展开调整
+  // 参考材料默认收起，保留对话空间。
   const hasModel = !!s.project?.model;
   const [isRibbonOpen, setIsRibbonOpen] = useState(false);
 
@@ -58,6 +58,7 @@ export function IdeaPanel({
     setMessages,
     ready: conversationReady,
     error: conversationError,
+    retry: retryConversation,
   } = useProjectConversation(projectId, () => [
     createInitialWelcome(hasModel, s.project?.name, s.spec),
   ]);
@@ -65,21 +66,6 @@ export function IdeaPanel({
   const prevProjectIdRef = useRef(projectId);
   const prevRevisionRef = useRef(s.project?.revision_id);
   const modelSpec = adjustmentSpec(s.project, s.spec);
-  const selectedStep = modelSpec?.modeling_plan?.steps.find((step) => step.id === selectedPartId);
-  const suggestionReferences = JSON.stringify(
-    selectedStep || modelSpec?.modeling_plan?.steps || [],
-  );
-  const tuningSuggestions = Object.entries(modelSpec?.modeling_plan?.parameters || {})
-    .filter(
-      ([name, parameter]) =>
-        !parameter.locked &&
-        suggestionReferences.includes(JSON.stringify({ parameter: name }).slice(1, -1)),
-    )
-    .slice(0, 4)
-    .map(([, parameter]) => ({
-      label: `调整${parameter.label}`,
-      value: `将${parameter.label}调整为${Number((parameter.value * 1.1).toFixed(2))} ${parameter.unit}，其余部件与细节保持不变`,
-    }));
   const activeModelName =
     s.preferences?.models?.find((m) => m.id === s.preferences?.active_model)?.name ||
     s.preferences?.chat_model ||
@@ -176,9 +162,10 @@ export function IdeaPanel({
     if (
       prevRevisionRef.current &&
       s.project?.revision_id &&
-      prevRevisionRef.current !== s.project?.revision_id
+      prevRevisionRef.current !== s.project?.revision_id &&
+      s.project.revision_number !== undefined
     ) {
-      const revNum = s.project?.revision_count || 1;
+      const revNum = s.project.revision_number;
       const milestoneMsg: ChatMessage = {
         id: `milestone-${Date.now()}`,
         sender: 'assistant',
@@ -206,7 +193,7 @@ export function IdeaPanel({
     prevRevisionRef.current = s.project?.revision_id;
   }, [
     s.project?.revision_id,
-    s.project?.revision_count,
+    s.project?.revision_number,
     s.project?.model,
     s.spec.prompt,
     projectId,
@@ -541,16 +528,6 @@ export function IdeaPanel({
         <div className="header-actions">
           <button
             type="button"
-            className={`ribbon-toggle-btn ${isRibbonOpen ? 'active' : ''}`}
-            onClick={() => setIsRibbonOpen(!isRibbonOpen)}
-            title={isRibbonOpen ? '收起物理定标条' : '展开物理定标条（尺寸/底座/照片）'}
-          >
-            <Sliders size={13} />
-            <span>参数</span>
-          </button>
-
-          <button
-            type="button"
             className="chat-clear-btn"
             onClick={handleClearHistory}
             title="清空当前作品的聊天历史记录"
@@ -572,11 +549,12 @@ export function IdeaPanel({
       </div>
       {conversationError && (
         <p className="chat-session-error" role="alert">
-          {conversationError} 请刷新后继续。
+          {conversationError}{' '}
+          <button type="button" className="link" onClick={retryConversation}>重新同步会话</button>
         </p>
       )}
 
-      {/* 2. 物理定标抽屉（尺寸、底座、模板、参考照片） */}
+      {/* 2. 参考材料与建模方式 */}
       <SpecRibbon
         isOpen={isRibbonOpen}
         onToggle={() => setIsRibbonOpen(!isRibbonOpen)}
@@ -584,14 +562,6 @@ export function IdeaPanel({
         onInspectPhoto={onInspectPhoto}
         inspectAssetId={inspectAssetId}
       />
-      <div className="creation-actions">
-        <button type="button" className="primary" title={s.generationBlock || '按当前素材与参数生成模型'} disabled={s.busy || s.running || !s.canGenerate} onClick={() => {
-          const requested = !hasModel && inputText.trim() ? { ...s.spec, prompt: inputText.trim() } : s.spec;
-          s.setSpec(requested);
-          void s.generate(undefined, requested);
-        }}>{s.running ? '正在造物…' : s.dirty && hasModel ? '应用修改 · 生成新版本' : hasModel ? '重新生成模型' : '生成模型'}</button>
-        <button type="button" className="secondary" onClick={() => setIsRibbonOpen(true)}>照片与参数</button>
-      </div>
       {s.generationBlock && <p className="surface-warning" role="status">{s.generationBlock}</p>}
       {isRibbonOpen && (s.spec.mode === 'text' || isPhotoMode(s.spec.mode)) && <ProviderChoice />}
       {!s.preferences?.blender?.available && <button className="link" onClick={() => s.setRoom('settings')}>配置本地建模引擎</button>}
@@ -603,7 +573,6 @@ export function IdeaPanel({
         onConfirmProposal={handleConfirmProposal}
         onQuoteProposal={handleQuoteProposal}
         onConfirmOrganize={handleConfirmOrganize}
-        onOpenRibbon={() => setIsRibbonOpen(true)}
         onSelectQuickPrompt={(prompt) => {
           setInputText(prompt);
         }}
@@ -619,7 +588,6 @@ export function IdeaPanel({
         onTextChange={setInputText}
         onSubmit={handleSubmit}
         isBusy={s.busy || s.running || !conversationReady}
-        tuningSuggestions={tuningSuggestions}
         hasModel={hasModel}
         selectedPartId={selectedPartId}
         selectedPointMm={selectedPointMm}

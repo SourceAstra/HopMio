@@ -9,6 +9,10 @@ import type {
   Preferences,
   Profile,
   Project,
+  ParameterPatch,
+  GeneratorRequest,
+  ScriptRequest,
+  ScriptDocument,
   Spec,
 } from '../types';
 import type { Room } from '../theme/rooms';
@@ -199,13 +203,22 @@ function useStudioState() {
     setProjects(list);
     return list;
   };
-  const act = async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
+  const refreshProject = async (id: string, baseRevision: string | null) => {
+    const latest = await call<Project>('project.get', { id });
+    if (currentId.current !== id || currentRevision.current !== baseRevision || project?.id !== id)
+      return;
+    // 只刷新仍在查看的版本；保留对话中尚未应用的草稿。
+    adopt(latest, dataSnapshot(currentSpec.current) !== dataSnapshot(editableSpec(project.spec)));
+    return latest;
+  };
+  const act = async <T,>(work: () => Promise<T>, onError?: (error: Error) => void): Promise<T | undefined> => {
     busyCount.current++;
     setBusy(true);
     try {
       return await work();
     } catch (error) {
       setNotice((error as Error).message);
+      onError?.(error as Error);
     } finally {
       busyCount.current--;
       setBusy(busyCount.current > 0);
@@ -478,7 +491,7 @@ function useStudioState() {
             ...requestSpec,
             mode: targetMode,
             provider:
-              adjustment || requestSpec.modeling_plan?.source_mesh
+              adjustment || requestSpec.modeling_plan?.source_mesh || requestSpec.modeling_plan?.generator
                 ? requestSpec.provider
                 : providerForMode(targetMode, requestSpec.provider),
           };
@@ -505,6 +518,50 @@ function useStudioState() {
     );
     return submitted;
   };
+  const applyParameters = async (request: ParameterPatch, onError?: (error: Error) => void) => {
+    let submitted: Job | undefined;
+    await executeWithJobCheck(async () => {
+      submitted = await act(async () => {
+        const next = await call<Job>('model.parameters.apply', request);
+        setJob(next);
+        return next;
+      }, onError);
+    }, '应用模型参数');
+    return submitted;
+  };
+  const applyGenerator = async (request: GeneratorRequest, onError?: (error: Error) => void) => {
+    let submitted: Job | undefined;
+    await executeWithJobCheck(async () => {
+      submitted = await act(async () => {
+        const next = await call<Job>('model.generators.apply', request);
+        setJob(next);
+        return next;
+      }, onError);
+    }, '采用参数化生成器');
+    return submitted;
+  };
+  const previewScript = async (request: ScriptRequest, onError?: (error: Error) => void) => {
+    let submitted: Job | undefined;
+    await executeWithJobCheck(async () => {
+      submitted = await act(async () => {
+        const next = await call<Job>('model.scripts.preview', request);
+        setJob(next);
+        return next;
+      }, onError);
+    }, '预览 Blender 脚本');
+    return submitted;
+  };
+  const adoptScript = async (projectId: string, baseRevision: string, candidate: string, document: ScriptDocument, onError?: (error: Error) => void) =>
+    act(async () => {
+      const updated = await call<Project>('model.scripts.adopt', { schema_version: 1, id: projectId,
+        base_revision_id: baseRevision, candidate_revision_id: candidate, document });
+      if (currentId.current === projectId && currentRevision.current === baseRevision) {
+        adopt(updated);
+        setNotice('已采用脚本模型，原版本保留在历史记录中。');
+      }
+      await refresh();
+      return updated;
+    }, onError);
   const organizeIdea = async (
     overridePrompt?: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
@@ -587,10 +644,11 @@ function useStudioState() {
   const scanRequested =
     isPhotoMode(spec.mode) &&
     !spec.modeling_plan?.source_mesh &&
+    !spec.modeling_plan?.generator &&
     (spec.photo_policy === 'surface' ||
       (spec.photo_policy !== 'parameters' &&
         spec.asset_ids.length >= (preferences?.reconstruction?.min_photos || 3)));
-  const needsPlan = !scanRequested && spec.provider === 'parametric' && !hasCurrentPlan(spec);
+  const needsPlan = !scanRequested && !spec.modeling_plan?.generator && spec.provider === 'parametric' && !hasCurrentPlan(spec);
   const generationBlock = !blenderReady
     ? '请先在家长设置配置本地 Blender。'
     : !hasPhotos && !spec.modeling_plan?.source_mesh && spec.mode !== 'text'
@@ -628,6 +686,7 @@ function useStudioState() {
     ready,
     adopt,
     refresh,
+    refreshProject,
     act,
     create,
     openNewProject,
@@ -640,6 +699,10 @@ function useStudioState() {
     deleteAsset,
     selectRevision,
     generate,
+    applyParameters,
+    applyGenerator,
+    previewScript,
+    adoptScript,
     organizeIdea,
     design,
     check,

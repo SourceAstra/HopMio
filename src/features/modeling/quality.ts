@@ -9,7 +9,10 @@ export function isGeometryOnly(model?: Model | null) {
 
 export function isModelDraft(model?: Model | null) {
   const review = model?.design_review || model?.photo_review;
-  return !!review && review.status !== 'accepted' && !isGeometryOnly(model);
+  const unreviewedSurface =
+    model?.photo_fidelity?.status === 'observed_surface' &&
+    model.photo_fidelity.appearance_status !== 'accepted';
+  return unreviewedSurface || (!!review && review.status !== 'accepted' && !isGeometryOnly(model));
 }
 
 export function reconstructionReport(model?: Model | null, job?: Job | null) {

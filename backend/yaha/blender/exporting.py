@@ -7,7 +7,7 @@ import bpy
 from mathutils import Vector
 
 
-def export_scene(obj, directory, max_faces, features, clean_flat=False, voxel_mm=0, preview_views=False, progress=None):
+def export_scene(obj, directory, max_faces, features, clean_flat=False, voxel_mm=0, preview_views=False, progress=None, max_removed_ratio=None):
     from finishing import bounds
     low, high = bounds(obj)
     shift = Vector((-(low.x + high.x) / 2, -(low.y + high.y) / 2, -low.z))
@@ -37,10 +37,13 @@ def export_scene(obj, directory, max_faces, features, clean_flat=False, voxel_mm
         bmesh.ops.triangulate(bm, faces=list(bm.faces))
         bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1e-8)
         bmesh.ops.dissolve_degenerate(bm, edges=list(bm.edges), dist=1e-8)
-        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
         bm.to_mesh(mesh)
     finally:
         bm.free()
+    if max_removed_ratio is not None:
+        from islands import remove_noise
+        cleanup = remove_noise(result, max_removed_ratio)
+        bpy.context.scene["yaha_export_cleanup"] = json.dumps(cleanup)
     if clean_flat:
         from islands import remove_flat_islands, remove_micro_islands
         remove_flat_islands(result)

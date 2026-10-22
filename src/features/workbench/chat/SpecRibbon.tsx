@@ -4,7 +4,6 @@ import {
   ChevronUp,
   ImagePlus,
   Plus,
-  Sliders,
   FolderOpen,
 } from 'lucide-react';
 import { useStudio } from '../../../state/StudioContext';
@@ -49,24 +48,22 @@ export function SpecRibbon({
   return (
     <div className={`spec-ribbon-container ${isOpen ? 'is-open' : 'is-collapsed'}`}>
       {/* 折叠模式下的概要摘要条 */}
-      <div className="spec-ribbon-summary" onClick={onToggle} role="button" tabIndex={0}>
-        <div className="summary-left">
-          <Sliders size={13} className="summary-icon" />
-          <span className="summary-tag">物理定标</span>
-          <span className="summary-chip">📏 {s.spec.height_mm || 80} mm</span>
-          <span className="summary-chip">{s.spec.base ? '🧱 稳固底座' : '⚪ 无底座'}</span>
+      <div className="spec-ribbon-summary">
+        <button type="button" className="summary-left" onClick={onToggle} aria-expanded={isOpen} title="参考材料与建模方式">
+          <FolderOpen size={13} className="summary-icon" />
+          <span className="summary-tag">参考材料</span>
           {s.spec.mode === 'text' && s.spec.provider === 'local' && (
             <span className="summary-chip">{templateMap[s.spec.template] || '乌萨奇'}</span>
           )}
           {hasPhotos && <span className="summary-chip">📸 {s.spec.asset_ids.length} 张照片</span>}
-        </div>
-        <div className="summary-right">
-          <span className="summary-toggle-text">{isOpen ? '收起参数' : '展开参数'}</span>
+        </button>
+        <button type="button" className="summary-right" onClick={onToggle} aria-expanded={isOpen}>
+          <span className="summary-toggle-text">{isOpen ? '收起材料' : '展开材料'}</span>
           {isOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        </div>
+        </button>
       </div>
 
-      {/* 展开时的参数配置抽屉 */}
+      {/* 参考材料与建模选项 */}
       {isOpen && (
         <div className="spec-ribbon-body">
           {/* 参考照片滑轨或空状态 */}
@@ -129,7 +126,7 @@ export function SpecRibbon({
           </div>
 
           {/* 尺寸高度与底座设置 */}
-          <div className="physical-spec-rail">
+          {!s.project?.model && <div className="physical-spec-rail">
             <div className="spec-item height-item">
               <span className="spec-label">高度</span>
               <div className="height-input-wrap">
@@ -169,7 +166,7 @@ export function SpecRibbon({
               />
               <span>附加制造底座</span>
             </label>
-          </div>
+          </div>}
 
           {/* 模板与浮雕选择 */}
           {s.spec.mode === 'text' && s.spec.provider === 'local' && (

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type KeyboardEvent } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Dice5, X, ArrowRight, Ban, Eye, Cpu, Brain, AlertTriangle, Layers, Palette, MessageSquare, Camera } from 'lucide-react';
 import { Usagi } from '../../components/Usagi';
 import { useStudio } from '../../state/StudioContext';
@@ -134,13 +134,6 @@ export function CraftLaunchModal({
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      void handleProceed();
-    }
-  };
-
   // 模式文本映射
   const modeNames: Record<Mode, string> = {
     text: '喊出想法造物',
@@ -242,7 +235,6 @@ export function CraftLaunchModal({
               className="launch-name-input"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder="例如：呆萌小恐龙桌面摆件…"
               maxLength={36}
               disabled={submitting}

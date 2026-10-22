@@ -39,7 +39,7 @@ def test_ambiguous_or_question_reply_does_not_issue_geometry(monkeypatch):
 def test_invalid_edit_and_unsupported_screenshot_are_explicit(monkeypatch):
     with pytest.raises(DomainError) as error:
         run(monkeypatch, {'action': 'adjust', 'summary': '调整'}, editable=False)
-    assert error.value.code == 'AI_RESPONSE'
+    assert error.value.code == 'AI_ADJUSTMENT_REQUIRES_PLAN'
     with pytest.raises(DomainError) as error:
         run(monkeypatch, {}, location_asset_id='test')
     assert error.value.code == 'AI_CAPABILITY'

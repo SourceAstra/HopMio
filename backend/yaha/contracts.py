@@ -57,7 +57,7 @@ class DesignSpec(BaseModel):
         else:
             data["mode"] = Mode.TEXT
 
-        provider_val = str(data.get("provider", "parametric")).strip().lower()
+        provider_val = str(data.get("provider", cls.model_fields["provider"].default)).strip().lower()
         if provider_val not in ("local", "parametric", "reconstruction"):
             provider_val = "parametric"
         if data["mode"] not in (Mode.IMAGE, Mode.MULTIVIEW) and provider_val == "reconstruction":

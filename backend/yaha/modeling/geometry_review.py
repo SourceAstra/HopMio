@@ -4,6 +4,7 @@ import math
 import numpy as np
 from ..contracts import DomainError
 from ..geometry.models import load_mesh
+from .compiler import compile_plan
 
 
 def geometry_digest(mesh):
@@ -33,7 +34,8 @@ def review_geometry(service, spec, result, project, job, *, adjustment=None, req
         if previous_digest == digest:
             raise DomainError("实际导出的网格没有发生变化，调整未应用，原模型保留。", "AI_ADJUSTMENT_UNCHANGED")
     effects = {effect["id"]: effect for effect in built.manifest.get("lettering_effects", [])}
-    steps = spec.modeling_plan.steps if spec.modeling_plan else []
+    active_ids = {step["id"] for step in compile_plan(spec.modeling_plan)["steps"]} if spec.modeling_plan else set()
+    steps = [step for step in spec.modeling_plan.steps if step.id in active_ids] if spec.modeling_plan else []
     for index, step in enumerate(steps):
         if step.shape != "text" or index == 0 and not spec.modeling_plan.surface:
             continue
@@ -44,7 +46,7 @@ def review_geometry(service, spec, result, project, job, *, adjustment=None, req
     report = {
         "schema_version": "yaha.design-review/v1", "status": "geometry_verified", "scope": "geometry_only",
         "visual_status": "unverified",
-        "message": "模型已更新，实际网格与尺寸复测通过；当前文字模型未进行视觉审阅，请旋转模型确认文字、位置及其他外观细节。",
+        "message": "模型已更新，实际网格与尺寸复测通过；外观尚未经过视觉审阅，请旋转模型确认。",
         "final_stl_sha256": hashlib.sha256(built.files["stl"]).hexdigest(),
         "evidence": [{"kind": "local_geometry", "geometry": geometry, "measurements": measurements,
                       "geometry_sha256": digest, "previous_geometry_sha256": previous_digest,

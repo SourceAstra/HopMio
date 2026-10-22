@@ -14,7 +14,7 @@ from ..contracts import DesignSpec, DomainError
 
 
 class ModelingPlanner(Protocol):
-    def design(self, spec: DesignSpec, images: list[str], observer=None, *, correction=None) -> GeometryPlan: ...
+    def design(self, spec: DesignSpec, images: list[str], observer=None, *, correction=None, adjustment=None, deadline=None) -> GeometryPlan: ...
 
 
 class ModelingReviewer(Protocol):
@@ -29,8 +29,8 @@ class CloudModelingPlanner:
     def __init__(self, client: JSONModelClient):
         self.client = client
 
-    def design(self, spec, images, observer=None, *, correction=None):
-        return self._design(spec, images, observer, correction=correction)
+    def design(self, spec, images, observer=None, *, correction=None, adjustment=None, deadline=None):
+        return self._design(spec, images, observer, correction=correction, adjustment=adjustment, deadline=deadline)
 
     def refine(self, spec, images, preview, observer=None, *, feedback=None, adjustment=None, deadline=None):
         reference = "data:image/png;base64," + base64.b64encode(preview).decode()
@@ -50,8 +50,17 @@ class CloudModelingPlanner:
                 data = self.client.complete(instruction, prompt, images, observer, **({"deadline": deadline} if deadline is not None else {}))
             except DomainError as error:
                 if not attempt and error.code in ("AI_RESPONSE", "AI_OUTPUT_LIMIT"):
+                    tight_hint = (
+                        " 上次方案因输出超长在传输中被截断。本次生成请务必执行紧凑输出："
+                        "1) 严禁深层公式嵌套，简单数值直接计算并填写常量；"
+                        "2) 精简 geometry_bindings，仅保留最关键绑定；"
+                        "3) 精简 assumptions，删除非必要说明；"
+                        "4) 确保一次性输出完全闭合的合法 JSON，严禁截断！"
+                        if error.code == "AI_OUTPUT_LIMIT" or "截断" in str(error) or "JSON" in str(error)
+                        else " 请务必只输出严格合法的完整闭合 JSON 对象，符合 Schema 规范，严禁遗漏括号或输出截断。"
+                    )
                     correction = {
-                        "error": str(error) + " 请务必只输出严格合法的完整闭合 JSON 对象，符合 Schema 规范，严禁遗漏括号或输出截断。" + (" 本次局部调整请求：" + adjustment if adjustment else ""),
+                        "error": str(error) + tight_hint + (" 本次局部调整请求：" + adjustment if adjustment else ""),
                         "plan": json.dumps(spec.modeling_plan.model_dump(), ensure_ascii=False) if spec.modeling_plan else "{}",
                     }
                     continue
@@ -59,8 +68,8 @@ class CloudModelingPlanner:
             if observer:
                 observer({"phase": "validating", "plan_draft": data, "attempt": attempt + 1})
             try:
-                if data.get("schema_version") not in (6, 7):
-                    raise DomainError("新方案必须使用 schema_version=6，所有部件显式填写 coordinate_origin；旧版本仅用于读取历史作品。", "PLAN_COORDINATES")
+                if data.get("schema_version") != 8:
+                    raise DomainError("新方案须使用 schema_version=8，声明可调主参数的 UI 安全域与几何绑定；旧版本仅用于读取历史作品。", "PLAN_COORDINATES")
                 plan = GeometryPlan.model_validate(data)
                 from .mesh_editing import require_source
                 if spec.modeling_plan:
@@ -70,7 +79,7 @@ class CloudModelingPlanner:
                 if spec.asset_ids and plan.surface and any(step.id == "base" for step in plan.steps):
                     raise DomainError("参考曲面的底座由执行器按用户选项添加；删除 id=base 的步骤，从主体开始，删除无用底座参数与推测。", "AI_PLAN_INVALID")
                 if spec.modeling_plan:
-                    references = json.dumps({"steps": [step.model_dump() for step in plan.steps], "surface": plan.surface.model_dump() if plan.surface else None, "source_mesh": plan.source_mesh.model_dump() if plan.source_mesh else None}, ensure_ascii=False)
+                    references = json.dumps({"steps": [step.model_dump() for step in plan.steps], "surface": plan.surface.model_dump() if plan.surface else None, "source_mesh": plan.source_mesh.model_dump() if plan.source_mesh else None, "geometry_bindings": plan.model_dump()["geometry_bindings"]}, ensure_ascii=False)
                     for name, parameter in spec.modeling_plan.parameters.items():
                         if parameter.locked:
                             if name not in plan.parameters or json.dumps({"parameter": name})[1:-1] not in references:
@@ -84,15 +93,19 @@ class CloudModelingPlanner:
                     previous = compile_plan(spec.modeling_plan)
                     if compiled_geometry(compiled) == compiled_geometry(previous):
                         raise DomainError("建模 AI 返回了与原方案相同的几何，调整未执行，原模型已保留。必须修改实际几何步骤，不能只改说明。", "AI_ADJUSTMENT_UNCHANGED")
-                for step, compiled_step in zip(plan.steps, compiled["steps"]):
-                    if step.shape == "loft":
-                        step.size_mm = tuple(compiled_step["size_mm"])
+                compiled_steps = {step["id"]: step for step in compiled["steps"]}
+                for step in plan.steps:
+                    if step.shape == "loft" and step.id in compiled_steps:
+                        step.size_mm = tuple(compiled_steps[step.id]["size_mm"])
                 break
             except (ValidationError, DomainError) as error:
                 message = str(error)
                 if isinstance(error, ValidationError):
-                    detail = error.errors(include_input=False, include_url=False)[0]
-                    message = "AI 方案字段无效：" + ".".join(str(part) for part in detail["loc"]) + "（" + detail["msg"] + "）。"
+                    details = error.errors(include_input=False, include_url=False)
+                    message = "AI 方案字段无效：" + "；".join(
+                        ".".join(str(part) for part in detail["loc"]) + "（" + detail["msg"] + "）"
+                        for detail in details[:8]
+                    ) + (f"；另有{len(details) - 8}处错误" if len(details) > 8 else "") + "。"
                 if attempt:
                     raise DomainError(message, error.code if isinstance(error, DomainError) and error.code == "AI_ADJUSTMENT_UNCHANGED" else "AI_PLAN_INVALID") from None
                 correction = {"error": message + (" 本次局部调整请求：" + adjustment if adjustment else ""), "plan": json.dumps(data, ensure_ascii=False)}
@@ -109,7 +122,7 @@ def current_plan(spec):
     return bool(plan and plan.source_prompt == spec.prompt and plan.source_asset_ids == spec.asset_ids and options_match)
 
 
-def design_plan(service, spec, job, *, correction=None):
+def design_plan(service, spec, job, *, correction=None, adjustment=None, deadline=None):
     images = reference_images(spec, service.assets)
     job.progress(5, "根据照片设计轮廓与造型参数" if images else "设计部件和尺寸")
 
@@ -127,18 +140,19 @@ def design_plan(service, spec, job, *, correction=None):
         }
         job.record(ai_diagnostics=value, message=stages.get(phase, "等待模型设计参数"))
 
-    plan = service.planner.design(spec, images, observe, correction=correction)
+    options = {key: value for key, value in (("adjustment", adjustment), ("deadline", deadline)) if value is not None}
+    plan = service.planner.design(spec, images, observe, correction=correction, **options)
     return apply_plan(service, spec, plan, job)
 
 
-def apply_plan(service, spec, plan, job):
+def apply_plan(service, spec, plan, job, *, allow_resize=False):
     job.check()
     plan.model_label = service.settings.values()["chat_model"][:100]
     spec.provider = "parametric"
     spec.schema_version = DesignSpec.model_fields["schema_version"].default
     spec.modeling_plan = plan
     height = next((rule["expected_mm"] for rule in compile_plan(plan)["constraints"] if rule["feature"] == "model.height"), None)
-    if height is not None:
+    if height is not None and allow_resize:
         spec.height_mm = height
     spec.assumptions = list(plan.assumptions)
     job.record(prepared_spec=spec.model_dump())

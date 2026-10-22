@@ -182,6 +182,7 @@ def build_surface(request, progress, directory):
 
 def export_surface(files, directory):
     data = json.loads(bpy.context.scene["yaha_surface"])
+    data["export_cleanup"] = json.loads(bpy.context.scene.get("yaha_export_cleanup", "{}"))
     source = bpy.data.objects[data["source"]]
     for obj in bpy.context.scene.objects:
         obj.select_set(False)

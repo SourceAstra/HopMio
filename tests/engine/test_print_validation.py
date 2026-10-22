@@ -17,3 +17,14 @@ def test_floating_letter_islands_are_distinguished_from_watertight_mesh(tmp_path
     part = next(item for item in report['items'] if item['name']=='独立部件')
     assert part['status']=='warn' and '2 个部件悬空' in part['detail']
     assert '支撑不会自动' in part['detail']
+
+
+def test_enclosed_cavity_is_not_reported_as_a_floating_solid(tmp_path):
+    outer=trimesh.creation.box(extents=[20,20,20]);outer.apply_translation([0,0,10])
+    inner=trimesh.creation.box(extents=[10,10,10]);inner.apply_translation([0,0,10]);inner.invert()
+    path=tmp_path/'cavity.stl'
+    trimesh.util.concatenate([outer,inner]).export(path)
+    report=inspect({'revision_id':'new','model':{'stl_id':'cavity'}},SimpleNamespace(path=lambda _:path),PrintProfile())
+    assert report['can_prepare'] and report['components']==1 and report['cavity_shells']==1
+    part=next(item for item in report['items'] if item['name']=='独立部件')
+    assert part['status']=='pass' and '悬空' not in part['detail']

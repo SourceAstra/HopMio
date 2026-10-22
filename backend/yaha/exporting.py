@@ -79,7 +79,7 @@ def export_project(project, assets, format):
                 "project.json",
                 json.dumps(
                     {
-                        "schema_version": 4,
+                        "schema_version": 5 if project["model"].get("script_document_id") else 4,
                         "name": project["name"],
                         "spec": project["spec"],
                         "story": project["story"],

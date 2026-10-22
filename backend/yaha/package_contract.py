@@ -6,6 +6,7 @@ MODEL_FILES = {
     "source.stl": ("source_stl_id", "mm"),
     "source.blend": ("blend_id", "m"),
     "manifest.json": ("manifest_id", None),
+    "script.json": ("script_document_id", None),
     "source.glb": ("source_glb_id", "m"),
     "manufacturing.glb": ("manufacturing_glb_id", "m"),
     "comparison.png": ("comparison_id", "pixels"),

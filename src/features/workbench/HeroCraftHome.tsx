@@ -293,10 +293,9 @@ export function HeroCraftHome({
     setUploading(true);
     try {
       const b64 = await fileBase64(file);
-      const asset = await call<Asset>('asset.create', {
+      const asset = await call<Asset>('asset.upload', {
         name: file.name,
-        type: 'image',
-        data: b64,
+        base64: b64,
       });
       setSelectedAssetIds((prev) => [...prev, asset.id]);
       s.setNotice(`已成功添加素材照片：${file.name}`);

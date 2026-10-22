@@ -8,16 +8,20 @@ def sweep(step):
     from tools import mesh_object
     path = step["path"]
     centers = [Vector(section["position_mm"]) for section in path]
+    derivatives = [centers[1] - centers[0]]
+    for previous, current, following in zip(centers, centers[1:], centers[2:]):
+        before, after = current - previous, following - current
+        # 分轴单调切线：平顶保持平顶，不在相邻控制点之外产生额外凸起。
+        derivatives.append(Vector(tuple(2 * a * b / (a + b) if a * b > 0 else 0 for a, b in zip(before, after))))
+    derivatives.append(centers[-1] - centers[-2])
     rings = []
     for index, (a, b) in enumerate(zip(centers, centers[1:])):
-        before = centers[index - 1] if index else a * 2 - b
-        after = centers[index + 2] if index + 2 < len(centers) else b * 2 - a
         start, end = path[index], path[index + 1]
         count = min(96, max(8, math.ceil((b - a).length / 0.5)))
         for sample in range(count):
             t = sample / count
             t2, t3 = t * t, t * t * t
-            position = (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * (b - before) / 2 + (-2 * t3 + 3 * t2) * b + (t3 - t2) * (after - a) / 2
+            position = (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * derivatives[index] + (-2 * t3 + 3 * t2) * b + (t3 - t2) * derivatives[index + 1]
             blend = t2 * (3 - 2 * t)
             rings.append((position, *(start[key] + (end[key] - start[key]) * blend for key in ("width_mm", "depth_mm", "twist_deg"))))
     rings.append((centers[-1], *(path[-1][key] for key in ("width_mm", "depth_mm", "twist_deg"))))

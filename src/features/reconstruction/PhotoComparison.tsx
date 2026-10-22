@@ -4,6 +4,8 @@ import type { Model } from '../../types';
 
 export function PhotoComparison({ model }: { model: Model }) {
   const [opacity, setOpacity] = useState(60);
+  if (model.photo_fidelity?.edited)
+    return <div className="comparison-empty">当前编辑版本尚无同相机对照图，请使用实物比对查看。</div>;
   if (!model.comparison_id || !model.reference_id)
     return <div className="comparison-empty">完成照片重建后，在这里比对原照片和观测表面。</div>;
   return (
@@ -14,14 +16,14 @@ export function PhotoComparison({ model }: { model: Model }) {
           className="comparison-render"
           style={{ opacity: opacity / 100 }}
           src={assetUrl(model.comparison_id)}
-          alt="同一相机角度的扫描表面"
+          alt="同一相机角度的制造模型"
         />
       </div>
       <label>
-        扫描表面叠加{' '}
+        制造模型叠加{' '}
         <input
           type="range"
-          aria-label="扫描表面叠加透明度"
+          aria-label="制造模型叠加透明度"
           min={0}
           max={100}
           value={opacity}
@@ -29,7 +31,7 @@ export function PhotoComparison({ model }: { model: Model }) {
         />
         <span>{opacity}%</span>
       </label>
-      <p>对齐照片与扫描原件，检查轮廓和细节。制造修补另存为副本。</p>
+      <p>对齐照片与制造模型，检查轮廓和细节；补齐的表面仍需人工核对。</p>
     </section>
   );
 }

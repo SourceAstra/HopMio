@@ -22,7 +22,7 @@ export function WorkbenchHeader({
   isDirty,
   isRunning,
   isBusy,
-  revisionCount,
+  revisionNumber,
   hasModel,
   onRename,
   onCreateNew,
@@ -36,7 +36,7 @@ export function WorkbenchHeader({
   isDirty: boolean;
   isRunning: boolean;
   isBusy: boolean;
-  revisionCount: number;
+  revisionNumber?: number;
   hasModel: boolean;
   onRename: (newName: string) => void;
   onCreateNew: () => void;
@@ -171,7 +171,7 @@ export function WorkbenchHeader({
             title="查看历史版本时光机"
           >
             <Clock3 size={11} />
-            <span>v{revisionCount}</span>
+            <span>v{revisionNumber ?? '—'}</span>
           </button>
         </div>
       </div>

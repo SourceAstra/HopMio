@@ -1230,6 +1230,29 @@
 }
 
 @media (max-width: 600px) {
+  .workbench-title-group,
+  .workbench-brand-title,
+  .workbench-project-capsule,
+  .workbench-heading-actions {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .workbench-title-group,
+  .workbench-heading-actions {
+    width: 100%;
+  }
+  .workbench-heading-actions {
+    gap: 8px;
+  }
+  .workbench-heading-actions > button,
+  .header-export-dropdown {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .workbench-heading-actions .desk-companion {
+    margin-left: auto;
+  }
   .workbench-heading > div:first-child {
     flex-direction: column;
     align-items: flex-start;

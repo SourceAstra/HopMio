@@ -15,6 +15,7 @@ from .settings import Settings
 from .jobs import Jobs
 from .modeling.backend import ModelingBackend
 from .modeling.blender_backend import BlenderBackend
+from .modeling.script_sandbox import ScriptExecutor, BubblewrapExecutor
 from .ai.understanding import interpret, suggest_adjustment
 from .ai.client import CloudJSONClient
 from .modeling.planner import CloudModelingPlanner, ModelingPlanner, ModelingReviewer, ModelingEditor, start_design
@@ -32,7 +33,7 @@ from .exporting import export_project
 
 
 class Service:
-    def __init__(self, root, planner: ModelingPlanner | None = None, modeler: ModelingBackend | None = None, reviewer: ModelingReviewer | None = None, outline_fitter: OutlineFitter | None = None, editor: ModelingEditor | None = None, assessor: PhotoAssessor | None = None, design_assessor: DesignAssessor | None = None):
+    def __init__(self, root, planner: ModelingPlanner | None = None, modeler: ModelingBackend | None = None, reviewer: ModelingReviewer | None = None, outline_fitter: OutlineFitter | None = None, editor: ModelingEditor | None = None, assessor: PhotoAssessor | None = None, design_assessor: DesignAssessor | None = None, script_executor: ScriptExecutor | None = None):
         self.db = Database(Path(root))
         self.assets = Assets(self.db)
         self.projects = Projects(self.db)
@@ -44,6 +45,7 @@ class Service:
             if asset.get("kind") == "model-draft":
                 self.assets.remove(asset["id"])
         self.modeler = modeler or BlenderBackend()
+        self.script_executor: ScriptExecutor = script_executor or BubblewrapExecutor()
         self.modelers = {"local": self.modeler, "parametric": self.modeler, "reconstruction": SurfaceBackend(self.modeler)}
         self.plan_operations = {"parametric": start_design, "reconstruction": start_surface_design}
         self.photo_observer = OpenCVPhotoObserver()
@@ -99,6 +101,24 @@ class Service:
         return start_generation(self, identifier, data, repair, adjustment=adjustment, auto_photo=auto_photo)
 
     def call(self, method, p):
+        if method.startswith("model.scripts."):
+            from .modeling.scripts import describe_script, inspect_script, save_script, preview_script, adopt_script
+            handlers = {"describe": describe_script, "inspect": inspect_script, "save": save_script, "preview": preview_script, "adopt": adopt_script}
+            handler = handlers.get(method.removeprefix("model.scripts."))
+            if handler:
+                return handler(self, p)
+        if method == "model.generators.list":
+            from .modeling.generators import list_generators
+            return list_generators()
+        if method == "model.generators.apply":
+            from .modeling.generators import apply_generator
+            return apply_generator(self, p)
+        if method == "model.parameters.describe":
+            from .modeling.parameters import describe_parameters
+            return describe_parameters(self, p)
+        if method == "model.parameters.apply":
+            from .modeling.parameters import apply_parameters
+            return apply_parameters(self, p)
         if method == "bootstrap":
             return self.bootstrap()
         if method == "project.create":

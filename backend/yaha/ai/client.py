@@ -149,66 +149,76 @@ def clean_and_repair_json(text: str) -> str:
 
 
 def close_truncated_json(s: str) -> str:
-    in_string = False
-    escape = False
-    stack = []
-    i = 0
-    while i < len(s):
-        char = s[i]
-        if escape:
-            escape = False
-            i += 1
-            continue
-        if char == "\\":
-            if in_string:
-                escape = True
-            i += 1
-            continue
-        if char == "\"":
-            in_string = not in_string
-            i += 1
-            continue
-        if not in_string:
-            if char in "{[":
-                stack.append(char)
-            elif char == "}" and stack and stack[-1] == "{":
-                stack.pop()
-            elif char == "]" and stack and stack[-1] == "[":
-                stack.pop()
-        i += 1
-    if in_string:
-        s += "\""
-    s = s.rstrip()
-    while True:
-        cleaned = re.sub(r",\s*\"[^\"]*\"\s*:\s*$", "", s)
-        cleaned = re.sub(r",\s*\"[^\"]*\"$", "", cleaned)
-        cleaned = re.sub(r"[,:\s]+$", "", cleaned)
-        if cleaned == s:
+    """健壮闭合任意截断的 JSON 文本，确保输出严格合法的 JSON 对象。"""
+    s = s.strip()
+    start = s.find("{")
+    if start == -1:
+        return "{}"
+    s = s[start:]
+
+    # 尝试逐步回退末尾残片，找到合法的闭合点
+    for _ in range(500):
+        in_string = False
+        escape = False
+        for c in s:
+            if escape:
+                escape = False
+                continue
+            if c == "\\":
+                if in_string:
+                    escape = True
+                continue
+            if c == '"':
+                in_string = not in_string
+                continue
+        
+        candidate = s
+        if in_string:
+            candidate += '"'
+        
+        # 彻底剪除悬空或未完成的键值结构
+        candidate = re.sub(r'([,{]\s*)"[^"]*"\s*:\s*$', r'\1', candidate)
+        candidate = re.sub(r':\s*$', '', candidate)
+        candidate = re.sub(r'([,{]\s*)"[^"]*"\s*$', r'\1', candidate)
+        candidate = re.sub(r'[,:\s]+$', '', candidate)
+
+        instack = []
+        in_str = False
+        esc = False
+        for c in candidate:
+            if esc:
+                esc = False
+                continue
+            if c == "\\":
+                if in_str:
+                    esc = True
+                continue
+            if c == '"':
+                in_str = not in_str
+                continue
+            if not in_str:
+                if c in "{[":
+                    instack.append(c)
+                elif c == "}" and instack and instack[-1] == "{":
+                    instack.pop()
+                elif c == "]" and instack and instack[-1] == "[":
+                    instack.pop()
+        
+        if not in_str:
+            closing = ["}" if op == "{" else "]" for op in reversed(instack)]
+            final_text = candidate + "".join(closing)
+            try:
+                res = json.loads(final_text)
+                if isinstance(res, dict):
+                    return final_text
+            except json.JSONDecodeError:
+                pass
+        
+        s = s[:-1].rstrip()
+        if not s:
             break
-        s = cleaned
-    in_string = False
-    escape = False
-    stack = []
-    for char in s:
-        if escape:
-            escape = False
-            continue
-        if char == "\\":
-            if in_string:
-                escape = True
-            continue
-        if char == "\"":
-            in_string = not in_string
-            continue
-        if not in_string:
-            if char in "{[":
-                stack.append(char)
-            elif char == "}" and stack and stack[-1] == "{":
-                stack.pop()
-            elif char == "]" and stack and stack[-1] == "[":
-                stack.pop()
-    closing = ["}" if op == "{" else "]" for op in reversed(stack)]
-    return s + "".join(closing)
+            
+    return "{}"
 
 
 def extract_json_object(text: str) -> dict:
@@ -265,6 +275,15 @@ def extract_json_object(text: str) -> dict:
             return obj
     except json.JSONDecodeError:
         pass
+    closed_raw = close_truncated_json(text)
+    try:
+        obj = json.loads(closed_raw)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+    if len(text) > 1500 and not text.rstrip().endswith("}"):
+        raise DomainError("模型方案因长度超出单次生成预算在传输中被截断，未能取得完整 JSON。已自动触发紧凑优化重试。", "AI_OUTPUT_LIMIT")
     obj = json.loads(text)
     if not isinstance(obj, dict):
         raise ValueError("需要 JSON 对象")

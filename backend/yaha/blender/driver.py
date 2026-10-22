@@ -47,7 +47,7 @@ def main():
         obj, features = build(request, lambda percent, stage: progress(directory, percent, stage), directory)
         progress(directory, 85, "Blender 正在导出真实网格与源工程")
         surface_options = request.get("plan", {}).get("surface")
-        files, size, topology = export_scene(obj, directory, request["max_faces"], features, clean_flat=bool(surface_options), voxel_mm=surface_options["voxel_mm"] if surface_options else 0, preview_views=request.get("preview_views", False), progress=lambda percent, stage: progress(directory, percent, stage))
+        files, size, topology = export_scene(obj, directory, request["max_faces"], features, clean_flat=bool(surface_options), voxel_mm=surface_options["voxel_mm"] if surface_options else 0, preview_views=request.get("preview_views", False), progress=lambda percent, stage: progress(directory, percent, stage), max_removed_ratio=request.get("max_removed_volume_ratio") if request.get("builder") == "surface" else None)
         files, reconstruction = finish(files, directory)
         print("YaHa topology: " + json.dumps(topology), flush=True)
         manifest = {

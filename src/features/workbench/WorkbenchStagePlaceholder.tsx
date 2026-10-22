@@ -23,6 +23,8 @@ interface WorkbenchStagePlaceholderProps {
   prompt?: string;
   mode?: Mode;
   error?: string;
+  onStartCraftText?: (prompt: string) => void;
+  onStartCraftPhoto?: () => void;
   onFillPrompt?: (text: string) => void;
   onGoToMaterials?: () => void;
 }
@@ -34,6 +36,8 @@ export function WorkbenchStagePlaceholder({
   prompt = '',
   mode = 'text',
   error,
+  onStartCraftText,
+  onStartCraftPhoto,
   onFillPrompt,
   onGoToMaterials,
 }: WorkbenchStagePlaceholderProps) {
@@ -90,7 +94,13 @@ export function WorkbenchStagePlaceholder({
           <div className="stage-guide-cards">
             <div
               className="stage-guide-card guide-photo"
-              onClick={onGoToMaterials}
+              onClick={() => {
+                if (onStartCraftPhoto) {
+                  onStartCraftPhoto();
+                } else {
+                  onGoToMaterials?.();
+                }
+              }}
               role="button"
               tabIndex={0}
             >
@@ -106,7 +116,14 @@ export function WorkbenchStagePlaceholder({
 
             <div
               className="stage-guide-card guide-text"
-              onClick={() => onFillPrompt?.('呆萌乌萨奇桌上多功能收纳盒')}
+              onClick={() => {
+                const targetText = prompt?.trim() || '呆萌乌萨奇桌上多功能收纳盒';
+                if (onStartCraftText) {
+                  onStartCraftText(targetText);
+                } else {
+                  onFillPrompt?.(targetText);
+                }
+              }}
               role="button"
               tabIndex={0}
             >
@@ -137,7 +154,13 @@ export function WorkbenchStagePlaceholder({
                   key={idea}
                   type="button"
                   className="inspiration-pill-btn"
-                  onClick={() => onFillPrompt?.(idea)}
+                  onClick={() => {
+                    if (onStartCraftText) {
+                      onStartCraftText(idea);
+                    } else {
+                      onFillPrompt?.(idea);
+                    }
+                  }}
                 >
                   <span>✦</span> {idea}
                 </button>

@@ -25,7 +25,12 @@ export function heightForPlan(plan: GeometryPlan): number | null {
   const evaluate = (value: Scalar, depth = 0): number => {
     if (depth > 8) return NaN;
     if (typeof value === 'number') return value;
-    if ('parameter' in value) return plan.parameters[value.parameter]?.value ?? NaN;
+    if ('parameter' in value) {
+      const parameter = plan.parameters[value.parameter];
+      if (parameter) return typeof parameter.value === 'number' ? parameter.value : NaN;
+      const derived = plan.geometry_bindings?.[value.parameter];
+      return derived !== undefined ? evaluate(derived, depth + 1) : NaN;
+    }
     const a = evaluate(value.args[0], depth + 1),
       b = evaluate(value.args[1], depth + 1);
     return { add: () => a + b, subtract: () => a - b, multiply: () => a * b, divide: () => a / b }[

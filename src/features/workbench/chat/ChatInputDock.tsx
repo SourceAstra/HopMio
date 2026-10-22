@@ -16,7 +16,6 @@ interface ChatInputDockProps {
   onLocationImageChange: (asset: Asset | null) => void;
   onLocationPointChange: (point: [number, number] | null) => void;
   onVoiceInput: () => void;
-  tuningSuggestions?: Array<{ label: string; value: string }>;
 }
 
 export function ChatInputDock({
@@ -32,14 +31,11 @@ export function ChatInputDock({
   onLocationImageChange,
   onLocationPointChange,
   onVoiceInput,
-  tuningSuggestions,
 }: ChatInputDockProps) {
   const locationInputRef = useRef<HTMLInputElement>(null);
 
   const quickChips =
-    hasModel && tuningSuggestions?.length
-      ? tuningSuggestions
-      : [
+    hasModel ? [] : [
           { label: '🥕 胡萝卜印章', value: '乌萨奇同款胡萝卜手办印章，底部平整带抓握手柄' },
           { label: '✦ 80mm 元气立牌', value: '乌萨奇开心招手元气立牌，高80mm自带稳固底座' },
           { label: '🦖 呆萌小恐龙', value: '圆滚滚胖嘟嘟的呆萌绿色小恐龙桌面摆件' },

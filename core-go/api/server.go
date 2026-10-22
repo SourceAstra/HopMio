@@ -15,46 +15,55 @@ import (
 
 // 公开开放的 RPC 方法白名单（对标 shared/methods.ts）
 var publicMethods = map[string]bool{
-	"bootstrap":                true,
-	"project.create":           true,
-	"project.get":              true,
-	"project.list":             true,
-	"project.history":          true,
-	"project.restore":          true,
-	"project.select_revision":  true,
-	"project.update":           true,
-	"project.delete":           true,
-	"project.delete_revision":  true,
-	"revision.delete":          true,
-	"project.export":           true,
-	"asset.upload":             true,
-	"asset.delete":             true,
-	"asset.list":               true,
-	"materials.get":            true,
-	"materials.save":           true,
-	"idea.interpret":           true,
-	"idea.adjustment":          true,
-	"idea.converse":            true,
-	"model.generate":           true,
-	"model.adjust":             true,
-	"model.plan":               true,
-	"model.check":              true,
-	"model.slice":              true,
-	"job.get":                  true,
-	"job.cancel":               true,
-	"job.list":                 true,
-	"profile.save":             true,
-	"settings.get":             true,
-	"settings.unlock":          true,
-	"settings.update":          true,
-	"settings.models.discover": true,
-	"settings.models.test":     true,
-	"studio.open":              true,
-	"conversation.get":         true,
-	"conversation.save":        true,
-	"workshop.templates":       true,
-	"model.repair":             true,
-	"project.import":           true,
+	"bootstrap":                 true,
+	"project.create":            true,
+	"project.get":               true,
+	"project.list":              true,
+	"project.history":           true,
+	"project.restore":           true,
+	"project.select_revision":   true,
+	"project.update":            true,
+	"project.delete":            true,
+	"project.delete_revision":   true,
+	"revision.delete":           true,
+	"project.export":            true,
+	"asset.upload":              true,
+	"asset.delete":              true,
+	"asset.list":                true,
+	"materials.get":             true,
+	"materials.save":            true,
+	"idea.interpret":            true,
+	"idea.adjustment":           true,
+	"idea.converse":             true,
+	"model.generate":            true,
+	"model.adjust":              true,
+	"model.parameters.describe": true,
+	"model.parameters.apply":    true,
+	"model.generators.list":     true,
+	"model.generators.apply":    true,
+	"model.scripts.describe":    true,
+	"model.scripts.inspect":     true,
+	"model.scripts.save":        true,
+	"model.scripts.preview":     true,
+	"model.scripts.adopt":       true,
+	"model.plan":                true,
+	"model.check":               true,
+	"model.slice":               true,
+	"job.get":                   true,
+	"job.cancel":                true,
+	"job.list":                  true,
+	"profile.save":              true,
+	"settings.get":              true,
+	"settings.unlock":           true,
+	"settings.update":           true,
+	"settings.models.discover":  true,
+	"settings.models.test":      true,
+	"studio.open":               true,
+	"conversation.get":          true,
+	"conversation.save":         true,
+	"workshop.templates":        true,
+	"model.repair":              true,
+	"project.import":            true,
 }
 
 type Server struct {
@@ -75,6 +84,7 @@ func NewServer(sup *daemon.Supervisor, webDir string) *Server {
 
 func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/api/rpc", s.handleRPC)
+	s.mux.HandleFunc("/api/blender/recompute", s.handleRecompute)
 	s.mux.HandleFunc("/api/assets/", s.handleAssets)
 
 	// 静态文件服务
@@ -120,16 +130,34 @@ func (s *Server) handleRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !publicMethods[req.Method] {
-		http.Error(w, `{"error":{"message":"未开放的操作：`+req.Method+`"}}`, http.StatusForbidden)
+	s.serveMethod(w, r, req.Method, req.Params)
+}
+
+func (s *Server) handleRecompute(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	params, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64*1024))
+	if err != nil || !json.Valid(params) {
+		http.Error(w, `{"error":{"message":"参数请求无效或超过大小限制。"}}`, http.StatusBadRequest)
+		return
+	}
+	s.serveMethod(w, r, "model.parameters.apply", params)
+}
+
+func (s *Server) serveMethod(w http.ResponseWriter, r *http.Request, method string, params json.RawMessage) {
+	if !publicMethods[method] {
+		http.Error(w, `{"error":{"message":"未开放的操作：`+method+`"}}`, http.StatusForbidden)
 		return
 	}
 
-	if (req.Method == "studio.open" || req.Method == "settings.update" || req.Method == "settings.models.discover" || req.Method == "settings.models.test") && !localAppRequest(r) {
+	if (method == "studio.open" || method == "settings.update" || method == "settings.models.discover" || method == "settings.models.test") && !localAppRequest(r) {
 		http.Error(w, `{"error":{"message":"请从本机呀哈造物页面执行此操作。"}}`, http.StatusForbidden)
 		return
 	}
-	result, err := s.sup.Call(req.Method, req.Params)
+	result, err := s.sup.Call(method, params)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		_ = json.NewEncoder(w).Encode(map[string]any{

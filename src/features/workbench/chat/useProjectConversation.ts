@@ -16,6 +16,7 @@ export function useProjectConversation(projectId: string, welcome: () => ChatMes
   const [view, setView] = useState({ projectId, messages: loadChatHistory(projectId) });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
   const currentId = useRef(projectId);
   currentId.current = projectId;
   const welcomeRef = useRef(welcome);
@@ -23,6 +24,7 @@ export function useProjectConversation(projectId: string, welcome: () => ChatMes
   const session = useRef<Session | null>(null);
   useEffect(() => {
     let active = true;
+    session.current = null;
     setReady(false);
     setError('');
     if (projectId === 'default') {
@@ -64,7 +66,7 @@ export function useProjectConversation(projectId: string, welcome: () => ChatMes
     return () => {
       active = false;
     };
-  }, [projectId]);
+  }, [projectId, reload]);
   useEffect(() => {
     const context = session.current;
     if (
@@ -91,7 +93,7 @@ export function useProjectConversation(projectId: string, welcome: () => ChatMes
       })
       .catch((reason) => {
         context.failed = true;
-        if (currentId.current === context.projectId) {
+        if (currentId.current === context.projectId && session.current === context) {
           setError((reason as Error).message);
           setReady(false);
         }
@@ -111,5 +113,6 @@ export function useProjectConversation(projectId: string, welcome: () => ChatMes
     },
     [projectId],
   );
-  return { messages: view.projectId === projectId ? view.messages : [], setMessages, ready, error };
+  return { messages: view.projectId === projectId ? view.messages : [], setMessages, ready, error,
+    retry: () => setReload((value) => value + 1) };
 }

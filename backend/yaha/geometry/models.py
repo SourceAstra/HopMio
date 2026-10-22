@@ -2,6 +2,12 @@ import trimesh
 from ..contracts import DomainError
 
 
+def split_shells(mesh):
+    """对朝向一致的制造网格区分实体外壳与负向内腔边界。"""
+    parts = mesh.split(only_watertight=False)
+    return [part for part in parts if part.volume >= 0], [part for part in parts if part.volume < 0]
+
+
 def load_mesh(path):
     try:
         value = trimesh.load(path, force="mesh")

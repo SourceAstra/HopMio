@@ -13,6 +13,8 @@ export function ParameterEditor({ selectedPartId }: { selectedPartId?: string | 
   return (
     <div className="modeling-parameters">
       {Object.entries(plan.parameters).map(([name, parameter]) => {
+        if (typeof parameter.value !== 'number') return null;
+        if (key === 'modeling_plan' && !parameter.ui) return null;
         const isHighlighted =
           !!selectedPartId &&
           (name.toLowerCase().includes(selectedPartId.toLowerCase()) ||
@@ -21,7 +23,7 @@ export function ParameterEditor({ selectedPartId }: { selectedPartId?: string | 
             (selectedPartId.startsWith('foot') && name.startsWith('foot')));
         return (
           <div className={`parameter-field ${isHighlighted ? 'highlighted' : ''}`} key={name}>
-            <label htmlFor={`parameter-${key}-${name}`}>{parameter.label}</label>
+            <label htmlFor={`parameter-${key}-${name}`}>{parameter.ui?.display_label || parameter.label}</label>
             <div className="number-field">
               <input
                 type="number"

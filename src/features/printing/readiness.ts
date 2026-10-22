@@ -1,5 +1,6 @@
 import type { Project, Profile } from '../../types';
 import { dataSnapshot } from '../../utils/dataSnapshot.ts';
+import { isModelDraft } from '../modeling/quality.ts';
 
 export function printingReadiness(
   project: Project | null,
@@ -14,6 +15,8 @@ export function printingReadiness(
       ? '当前任务尚未结束，请稍后继续。'
       : dirty
         ? '有未保存的参数修改：请先生成新版本，或选择使用已保存模型。'
+        : isModelDraft(project.model)
+          ? '当前模型仍是待改进草稿，外观审阅通过后才能进入打印准备。'
         : '';
   const report = project?.validation;
   const profileMatches = !!report && dataSnapshot(profile) === dataSnapshot(report.profile);
